@@ -17,6 +17,7 @@ development rules, workflow processes, and validation requirements.
 6. Image assets and portability
 7. Watcher
 8. Hardening and regression harness
+9. Polish and test coverage
 
 Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interface (`run`), scene reader (`inspect`), and export are the primary agent workflow. The individual draw/edit/delete/undo subcommands are convenience wrappers and follow after.
 
@@ -93,6 +94,14 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - packaging validation
 - `uv tool install` validation
 
+#### Milestone 9: Polish and test coverage (open)
+
+- normalize `--json` error envelope in `new --watch` failure path
+- refactor `apply_batch()` to remove duplicated scene-derivation branches
+- add tests for JSON error envelope consistency across commands
+- add tests for `apply_batch()` edge cases
+- add tests for CLI argument validation edge cases
+
 ### Current implementation status
 
 Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8.
@@ -130,4 +139,4 @@ Implementation notes:
 - image rendering and export now validate session-local assets; image source replacement remains out of scope
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 
-Next milestone: **None — roadmap complete.**
+Next milestone: **Milestone 9 — Polish and test coverage.**
