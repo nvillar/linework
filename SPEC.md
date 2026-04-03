@@ -37,11 +37,15 @@ The implementation must follow these principles:
 
 - The implementation language is Python.
 - Python environments, dependencies, and execution must always be managed with `uv`.
+- Local development must use a project-local, `uv`-managed virtual environment at `.venv/`.
+- The system Python interpreter must never be used directly for `mural` development, tooling, tests, or execution.
 - Do not use bare `pip`, `python -m pip`, ad hoc virtualenv activation, or direct Python execution when a `uv` equivalent exists.
 
 Normative examples:
 
 ```bash
+uv venv
+uv sync
 uv add pillow
 uv add --dev pytest ruff mypy
 uv run pytest
@@ -128,6 +132,18 @@ An issue should not be closed until:
 - tests for the slice exist
 - relevant quality checks pass
 
+After a milestone is implemented, the development process must also include:
+
+- run the full project quality and test suite
+- perform a final code review before closing out the milestone
+- review this spec for consistency and freshness against the codebase
+- update the spec so it remains the current source of truth
+- remove transitional language or historical implementation notes that no longer reflect the current state
+- update the milestone issue if needed to reflect the final delivered result
+- close the milestone issue only after the code, tests, and spec are in sync
+- commit all milestone code and documentation changes
+- push the resulting commits to the remote repository
+
 ### 4.3 README policy
 
 - Do not create `README.md` until code exists.
@@ -147,11 +163,31 @@ The project must include and use:
 Normative command set:
 
 ```bash
+uv venv
+uv sync
 uv run pytest
 uv run ruff check .
 uv run ruff format --check .
 uv run mypy src
 ```
+
+### 4.5 Development environment notes
+
+In restricted or sandboxed environments, `uv` may default to cache or interpreter locations outside the repository working tree.
+
+When that would break development or automation, it is acceptable to override `uv` paths to keep them local to the repo, for example:
+
+```bash
+export UV_CACHE_DIR=.uv-cache
+```
+
+If a managed interpreter location also needs to be made repo-local, that may be configured for the active environment, for example:
+
+```bash
+export UV_PYTHON_INSTALL_DIR=.uv-python
+```
+
+These overrides are implementation-environment workarounds. They do not change the product requirements for `mural` itself.
 
 ## 5. MVP Scope
 
@@ -1008,6 +1044,13 @@ uv run ruff format --check .
 uv run mypy src
 ```
 
+### 17.6 Virtual environment policy
+
+- The repository must use a project-local `.venv/` created and managed by `uv`.
+- Development commands must be executed through `uv run ...` against that environment.
+- Do not rely on the system Python interpreter for local development.
+- If a managed interpreter must be installed, it must be installed via `uv`.
+
 ## 18. Implementation Plan
 
 Implementation should proceed in milestones tracked in GitHub.
@@ -1077,6 +1120,8 @@ Implementation should proceed in milestones tracked in GitHub.
 
 - Use Python.
 - Use `uv` for Python dependency management and execution.
+- Use a `uv`-managed project-local `.venv/`.
+- Do not use the system Python interpreter directly for `mural` development.
 - Track implementation via GitHub Issues and Milestones.
 - Do not write the README until code exists.
 - Keep sessions portable and self-contained.
