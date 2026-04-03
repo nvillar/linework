@@ -19,14 +19,18 @@ status diary. This file governs *how* work is done.
 
 ## 2. Python and environment rules
 
-These rules are **non-negotiable**. They apply to every context: the repository
-working directory, `/tmp`, integration test helpers, one-off checks, and any other
-directory. Violations break the project and pollute the system Python installation.
+These rules are **non-negotiable**. They apply in every context: the repository,
+`/tmp`, integration test helpers, one-off checks — everywhere.
 
-### The single rule: always use `uv run`
+### Never use the system Python
 
-Every Python invocation — scripts, tests, linters, type checkers, one-line checks,
-REPL sessions — must go through `uv run`. There are no exceptions.
+The system Python is likely a different version (e.g., 3.13) than the project
+requires (3.12). Running `python`, `python3`, or `pip` directly uses the system
+interpreter, which produces wrong test results and pollutes the system
+site-packages with project-specific libraries.
+
+`uv run` is the way to avoid this. It resolves the correct Python version and
+project dependencies automatically. Use it for every Python invocation:
 
 ```bash
 # CORRECT — always
@@ -35,15 +39,15 @@ uv run python -c "print('hello')"
 uv run mypy src
 uv run ruff check .
 
-# WRONG — never, in any directory, for any reason
+# WRONG — uses the system Python
 python -m pytest
 python3 tests/test_foo.py
 python -c "import mural"
 pip install somepackage
 ```
 
-Do **not** invoke `python`, `python3`, `pip`, or `pip3` directly — not in the repo,
-not in `/tmp`, not in a subprocess, not for anything.
+Do **not** invoke `python`, `python3`, `pip`, or `pip3` directly — not in the
+repo, not in `/tmp`, not in a subprocess, not for anything.
 
 ### Environment and dependency management
 
@@ -66,28 +70,19 @@ If you need a temporary directory (e.g., for integration tests, scratch work, or
 isolated test runs), you **must** follow these rules:
 
 1. Use `/tmp/mural/` as the dedicated temporary directory (not `/tmp/` directly).
-2. **Create a dedicated `.venv` inside `/tmp/mural/`** before running any Python.
-3. **Use `uv run` for all Python execution in that directory** — the same rule as
-   in the repository. Creating the venv is not enough; you must still use `uv run`.
+2. Create a `uv`-managed `.venv` there so that `uv run` resolves to the correct
+   Python version instead of falling back to the system interpreter.
+3. Use `uv run` for all Python execution, same as in the repository.
 
 ```bash
 mkdir -p /tmp/mural
 cd /tmp/mural
 uv venv .venv --python 3.12
-uv run python -c "print('ready')"   # correct
-uv run pytest                        # correct
-# python -c "print('wrong')"        # WRONG — never use bare python
+uv run python -c "print('ready')"   # uses project Python 3.12
+uv run pytest                        # uses project Python 3.12
 ```
 
-4. Never run `python` or `python3` in `/tmp/` without going through `uv run`.
-5. Clean up `/tmp/mural/` when done if appropriate.
-
-### Why this matters
-
-The system Python is likely a different version (e.g., 3.13) than the project requires
-(3.12). Running `python3` directly installs packages into the system site-packages,
-creates version conflicts, and produces unreliable test results. Using `uv run` ensures
-the correct Python version and isolated dependencies every time.
+4. Clean up `/tmp/mural/` when done if appropriate.
 
 ## 4. Milestone workflow
 
