@@ -6,31 +6,30 @@ mural: sketch and paint ideas for agents
 Mural is a non-interactive, session-based CLI for creating quick visual artifacts.
 Every drawing lives in an explicit session directory and renders to a PNG preview.
 
-Core workflow:
-  1. Create a session: mural new --name idea
-  2. Draw or edit objects against that session path
-  3. Inspect or export the latest PNG
-  4. Optionally open a read-only watcher window
-
-Common commands:
+Currently implemented:
+  mural
+  mural --version
   mural new
-  mural inspect
-  mural draw rect
-  mural edit rect
-  mural export
-  mural watch
-  mural run
+
+Core workflow today:
+  1. Create a session: mural new --name idea
+  2. Use the printed session path or JSON output as the handle for later commands
+  3. Inspect the generated session files and latest PNG in the session directory
+
+Current command surface:
+  mural new
 
 Examples:
   mural new --name idea
-  mural draw rect --session ~/.mural/sessions/<id> --x 80 --y 120 --width 300 --height 180
-  mural export --session ~/.mural/sessions/<id> --out ./idea.png
-  mural watch --session ~/.mural/sessions/<id>
+  mural new --session ./idea-session --width 1600 --height 900
+  mural new --name idea --background #F5F5F5
+  mural new --json
 
 Help:
   mural --help
-  mural <command> --help
+  mural new --help
 
 Status:
-  Milestone 1 bootstrap is in progress. Core drawing commands are not implemented yet.
+  Milestones 1 and 2 are complete. Session creation and storage core are implemented.
+  Draw, edit, export, inspect, batch, and watcher commands are not implemented yet.
 """

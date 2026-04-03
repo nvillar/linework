@@ -8,6 +8,46 @@ This document is the source of truth for the `mural` project until code exists a
 
 Development workflow requirements live in `DEVELOPMENT.md`.
 
+Sections that describe the full MVP are target requirements for the completed MVP.
+Current implementation status is tracked explicitly in this document so that target requirements are not mistaken for already-shipped behavior.
+
+## 0. Current Implementation
+
+Completed milestones:
+
+- Milestone 1: Repository bootstrap
+- Milestone 2: Session and storage core
+
+Current implemented command surface:
+
+- `mural`
+- `mural --version`
+- `mural new`
+
+Current implemented behavior:
+
+- rich no-argument bootstrap output
+- local `uv`-managed project layout and toolchain
+- explicit session creation via `mural new --session PATH`
+- default session creation under the configured mural home root
+- `session.json`, `scene.json`, `commands.jsonl`, `assets/`, and `render/latest.png` initialization
+- blank PNG render on session creation
+- human-readable and `--json` output for `mural new`
+- machine-local single-writer locking
+- `MURAL_HOME` override support for testing and constrained environments
+
+Not yet implemented:
+
+- `inspect`
+- `export`
+- `watch`
+- `draw`
+- `edit`
+- `delete`
+- `undo`
+- `run`
+- `mural new --watch`
+
 ## 1. Purpose
 
 `mural` is an agent-first CLI tool for quickly drawing and sketching visual ideas.
@@ -194,7 +234,7 @@ export UV_PYTHON_INSTALL_DIR=.uv-python
 
 These overrides are implementation-environment workarounds. They do not change the product requirements for `mural` itself.
 
-## 5. MVP Scope
+## 5. Target MVP Scope
 
 ### 5.1 In scope
 
@@ -493,7 +533,7 @@ For `mural run` batch mode:
 - prior successful operations remain committed
 - the command exits non-zero on failure
 
-## 10. Command Surface
+## 10. Target MVP Command Surface
 
 The MVP CLI must include exactly these top-level commands:
 

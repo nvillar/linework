@@ -58,6 +58,15 @@ def test_version_flag_prints_package_version() -> None:
     assert result.stderr == ""
 
 
+def test_new_help_does_not_advertise_unimplemented_watch_flag() -> None:
+    result = run_cli("new", "--help")
+
+    assert result.returncode == 0
+    assert "--watch" not in result.stdout
+    assert "--json" in result.stdout
+    assert result.stderr == ""
+
+
 def test_new_uses_explicit_session_path(tmp_path: Path) -> None:
     session_path = tmp_path / "explicit-session"
     result = run_cli(

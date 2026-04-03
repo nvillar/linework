@@ -36,11 +36,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Canvas background color in #RRGGBB or #RRGGBBAA form.",
     )
     new_parser.add_argument(
-        "--watch",
-        action="store_true",
-        help="Open a watcher after creating the session.",
-    )
-    new_parser.add_argument(
         "--json",
         action="store_true",
         help="Print JSON output for the created session.",
@@ -73,10 +68,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def run_new(args: argparse.Namespace) -> int:
     """Handle `mural new`."""
-    if args.watch:
-        print("error: --watch is not implemented yet", file=sys.stderr)
-        return 2
-
     try:
         created_session = create_session(
             session=args.session,
