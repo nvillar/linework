@@ -177,6 +177,52 @@ class MutationResult:
         }
 
 
+@dataclass(frozen=True)
+class BatchResult:
+    """Result of applying a JSONL batch to a session."""
+
+    applied: int
+    failed: dict[str, str] | None
+    results: list[dict[str, object]]
+    session_path: str
+    scene_object_count: int
+    latest_render: str
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize batch result."""
+        return {
+            "applied": self.applied,
+            "failed": self.failed,
+            "results": self.results,
+            "session_path": self.session_path,
+            "scene_object_count": self.scene_object_count,
+            "latest_render": self.latest_render,
+        }
+
+
+@dataclass(frozen=True)
+class InspectResult:
+    """Result of inspecting a session."""
+
+    session_path: str
+    session_id: str
+    canvas: Canvas
+    object_count: int
+    latest_render: str
+    objects: list[dict[str, object]]
+
+    def to_dict(self) -> dict[str, object]:
+        """Serialize inspect result."""
+        return {
+            "session_path": self.session_path,
+            "session_id": self.session_id,
+            "canvas": self.canvas.to_dict(),
+            "object_count": self.object_count,
+            "latest_render": self.latest_render,
+            "objects": self.objects,
+        }
+
+
 def require_int(value: object, *, field: str) -> int:
     """Require an integer field."""
     if isinstance(value, bool) or not isinstance(value, int):

@@ -8,6 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 from PIL import Image
 
 from mural.bootstrap import BOOTSTRAP_TEXT
@@ -31,7 +32,7 @@ def run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.Complet
     )
 
 
-def test_main_without_args_prints_bootstrap(capsys: object) -> None:
+def test_main_without_args_prints_bootstrap(capsys: pytest.CaptureFixture[str]) -> None:
     from mural.cli import main
 
     exit_code = main([])
@@ -165,7 +166,9 @@ def test_new_rejects_invalid_background(tmp_path: Path) -> None:
     assert "background must be" in result.stderr
 
 
-def test_writer_lock_blocks_overlapping_access(tmp_path: Path, monkeypatch: object) -> None:
+def test_writer_lock_blocks_overlapping_access(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from mural import config
 
     monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")

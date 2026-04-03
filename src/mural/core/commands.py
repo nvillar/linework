@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from pathlib import Path
 
-from mural.core.errors import CommandValidationError
+from mural.core.errors import CommandValidationError, ObjectNotFoundError
 from mural.core.objects import build_object
 from mural.storage.ids import format_object_id, format_operation_id, iso_timestamp, utc_now
 from mural.storage.models import CommandRecord
@@ -31,12 +31,7 @@ _EDIT_COMMANDS = {
 }
 
 
-def next_operation_id(commands: Iterable[CommandRecord]) -> str:
-    """Return the next operation identifier."""
-    return format_operation_id(sum(1 for _ in commands) + 1)
-
-
-def next_object_id(commands: Iterable[CommandRecord]) -> str:
+def next_object_id(commands: list[CommandRecord]) -> str:
     """Return the next object identifier based on command history."""
     max_index = 0
     for command in commands:
@@ -48,6 +43,28 @@ def next_object_id(commands: Iterable[CommandRecord]) -> str:
             continue
         max_index = max(max_index, int(match.group(1)))
     return format_object_id(max_index + 1)
+
+
+def _resolve_live_objects(commands: list[CommandRecord]) -> dict[str, str]:
+    """Build a map of live {object_id: object_type} from effective commands.
+
+    Effective commands are those remaining after undo resolution.
+    """
+    from mural.core.scene import resolve_effective_commands
+
+    effective = resolve_effective_commands(commands)
+    live: dict[str, str] = {}
+    for cmd in effective:
+        if cmd.op.startswith("draw."):
+            obj_id = cmd.payload.get("id")
+            if isinstance(obj_id, str):
+                obj_type = cmd.op.removeprefix("draw.")
+                live[obj_id] = obj_type
+        elif cmd.op == "delete":
+            obj_id = cmd.payload.get("id")
+            if isinstance(obj_id, str):
+                live.pop(obj_id, None)
+    return live
 
 
 def normalize_command(
@@ -72,10 +89,14 @@ def normalize_command(
         object_id = normalized_payload.get("id")
         if not isinstance(object_id, str):
             raise CommandValidationError("id must be provided for edit commands")
+        _validate_target_object(existing_commands, object_id, op)
     elif op == "delete":
         object_id = normalized_payload.get("id")
         if not isinstance(object_id, str):
             raise CommandValidationError("id must be provided for delete")
+        live = _resolve_live_objects(existing_commands)
+        if object_id not in live:
+            raise ObjectNotFoundError(f"object not found: {object_id}")
     elif op == "undo":
         if normalized_payload:
             raise CommandValidationError("undo does not accept a payload")
@@ -91,3 +112,20 @@ def normalize_command(
         op=op,
         payload=normalized_payload,
     )
+
+
+def _validate_target_object(
+    existing_commands: list[CommandRecord],
+    object_id: str,
+    edit_op: str,
+) -> None:
+    """Validate that the target object exists and matches the edit command type."""
+    live = _resolve_live_objects(existing_commands)
+    if object_id not in live:
+        raise ObjectNotFoundError(f"object not found: {object_id}")
+    expected_type = edit_op.removeprefix("edit.")
+    actual_type = live[object_id]
+    if actual_type != expected_type:
+        raise CommandValidationError(
+            f"object {object_id} is type '{actual_type}', not compatible with '{edit_op}'"
+        )

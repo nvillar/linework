@@ -3,29 +3,31 @@
 from __future__ import annotations
 
 import json
-import re
 import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
 
 from mural.config import sessions_root
+from mural.constants import HEX_COLOR
 from mural.core.commands import normalize_command
 from mural.core.scene import derive_scene
 from mural.render.png import render_blank_canvas, render_scene
 from mural.storage.ids import build_session_id, iso_timestamp, normalize_slug, utc_now
 from mural.storage.lock import writer_lock
 from mural.storage.models import (
+    BatchResult,
     Canvas,
     CommandRecord,
     CreatedSession,
+    InspectResult,
     MutationResult,
     SceneSnapshot,
     SessionMetadata,
     SessionPaths,
 )
 
-_HEX_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$")
+_HEX_COLOR = HEX_COLOR
 
 
 class SessionError(RuntimeError):
@@ -248,30 +250,35 @@ def write_mutated_session(
     scene: SceneSnapshot,
     commands: list[CommandRecord],
 ) -> None:
-    """Write updated session state to disk using temp files and atomic replacement."""
+    """Write updated session state to disk atomically.
+
+    All files are prepared in a staging directory, then swapped into the
+    session directory via individual atomic ``replace()`` calls.  If any
+    staging step fails, the session directory is left untouched.
+    """
     session_path.mkdir(parents=True, exist_ok=True)
+    parent = session_path.parent
+    staging_dir = Path(tempfile.mkdtemp(prefix=f".{session_path.name}.mut-", dir=parent))
 
-    session_tmp = write_temp_text(
-        session_path=session_path,
-        target_name="session.json",
-        content=json.dumps(metadata.to_dict(), indent=2) + "\n",
-    )
-    scene_tmp = write_temp_text(
-        session_path=session_path,
-        target_name="scene.json",
-        content=json.dumps(scene.to_dict(), indent=2) + "\n",
-    )
-    commands_tmp = write_temp_text(
-        session_path=session_path,
-        target_name="commands.jsonl",
-        content=serialize_commands(commands),
-    )
-    render_tmp = write_temp_render(session_path=session_path, metadata=metadata, scene=scene)
+    try:
+        (staging_dir / "render").mkdir()
+        write_json(staging_dir / "session.json", metadata.to_dict())
+        write_json(staging_dir / "scene.json", scene.to_dict())
+        (staging_dir / "commands.jsonl").write_text(serialize_commands(commands), encoding="utf-8")
+        render_scene(scene, staging_dir / "render" / "latest.png", session_path=session_path)
+    except Exception:
+        shutil.rmtree(staging_dir, ignore_errors=True)
+        raise
 
-    session_tmp.replace(session_path / "session.json")
-    scene_tmp.replace(session_path / "scene.json")
-    commands_tmp.replace(session_path / "commands.jsonl")
-    render_tmp.replace(session_path / metadata.paths.latest_render)
+    # Swap staged files into the live session directory.
+    try:
+        (staging_dir / "session.json").replace(session_path / "session.json")
+        (staging_dir / "scene.json").replace(session_path / "scene.json")
+        (staging_dir / "commands.jsonl").replace(session_path / "commands.jsonl")
+        (session_path / "render").mkdir(exist_ok=True)
+        (staging_dir / "render" / "latest.png").replace(session_path / metadata.paths.latest_render)
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
 
 
 def resolve_session_name(
@@ -312,22 +319,148 @@ def serialize_commands(commands: list[CommandRecord]) -> str:
     return "\n".join(json.dumps(command.to_dict()) for command in commands) + "\n"
 
 
-def write_temp_text(*, session_path: Path, target_name: str, content: str) -> Path:
-    """Write a temp text file inside the session directory."""
-    temporary_path = session_path / f".{target_name}.tmp"
-    temporary_path.write_text(content, encoding="utf-8")
-    return temporary_path
+def inspect_session(session_path: str | Path) -> InspectResult:
+    """Read and return the current session state for inspection."""
+    resolved = Path(session_path).expanduser().resolve()
+    metadata = read_session_metadata(resolved)
+    scene = read_scene_snapshot(resolved)
+    return InspectResult(
+        session_path=str(resolved),
+        session_id=metadata.session_id,
+        canvas=metadata.canvas,
+        object_count=len(scene.objects),
+        latest_render=str(resolved / metadata.paths.latest_render),
+        objects=scene.objects,
+    )
 
 
-def write_temp_render(
+def export_session(session_path: str | Path, *, out: str) -> str:
+    """Export the current scene render to an output path."""
+    resolved = Path(session_path).expanduser().resolve()
+    metadata = read_session_metadata(resolved)
+    source = resolved / metadata.paths.latest_render
+    if not source.is_file():
+        raise SessionNotFoundError(f"latest render not found: {source}")
+    destination = Path(out).expanduser().resolve()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+    return str(destination)
+
+
+def apply_batch(
+    session_path: str | Path,
     *,
-    session_path: Path,
-    metadata: SessionMetadata,
-    scene: SceneSnapshot,
-) -> Path:
-    """Render a temp PNG file inside the session directory."""
-    render_dir = session_path / "render"
-    render_dir.mkdir(exist_ok=True)
-    temporary_path = render_dir / ".latest.png.tmp"
-    render_scene(scene, temporary_path, session_path=session_path)
-    return temporary_path
+    operations: list[dict[str, object]],
+) -> BatchResult:
+    """Apply a batch of JSONL operations to a session.
+
+    Holds the writer lock for the entire batch. Renders once at the end.
+    Returns per-operation results and stops on first failure.
+    """
+    resolved = Path(session_path).expanduser().resolve()
+    results: list[dict[str, object]] = []
+    failed: dict[str, str] | None = None
+
+    with writer_lock(resolved):
+        metadata = read_session_metadata(resolved)
+        commands = read_commands(resolved)
+
+        for entry in operations:
+            op = entry.get("op")
+            payload = entry.get("payload")
+            if not isinstance(op, str):
+                failed = {"op": str(op), "error": "op must be a string"}
+                break
+            if payload is not None and not isinstance(payload, dict):
+                failed = {"op": op, "error": "payload must be a mapping"}
+                break
+
+            try:
+                normalized = normalize_command(
+                    op=op,
+                    payload=payload,
+                    existing_commands=commands,
+                    session_path=resolved,
+                )
+            except Exception as exc:
+                failed = {"op": op, "error": str(exc)}
+                break
+
+            commands = [*commands, normalized]
+            obj_id = normalized.payload.get("id")
+            results.append(
+                {
+                    "op_id": normalized.op_id,
+                    "op": normalized.op,
+                    "object_id": obj_id if isinstance(obj_id, str) else None,
+                }
+            )
+
+        if not results and failed is not None:
+            # Nothing applied, nothing to write.
+            return BatchResult(
+                applied=0,
+                failed=failed,
+                results=[],
+                session_path=str(resolved),
+                scene_object_count=len(
+                    derive_scene(
+                        canvas=metadata.canvas,
+                        commands=commands,
+                        session_path=resolved,
+                        session_id=metadata.session_id,
+                    ).objects
+                ),
+                latest_render=str(resolved / metadata.paths.latest_render),
+            )
+
+        if not results:
+            # Empty input — nothing to do.
+            return BatchResult(
+                applied=0,
+                failed=None,
+                results=[],
+                session_path=str(resolved),
+                scene_object_count=len(
+                    derive_scene(
+                        canvas=metadata.canvas,
+                        commands=commands,
+                        session_path=resolved,
+                        session_id=metadata.session_id,
+                    ).objects
+                ),
+                latest_render=str(resolved / metadata.paths.latest_render),
+            )
+
+        # Derive scene and write once.
+        scene = derive_scene(
+            canvas=metadata.canvas,
+            commands=commands,
+            session_path=resolved,
+            session_id=metadata.session_id,
+        )
+        last_command = commands[-1]
+        updated_metadata = SessionMetadata(
+            schema_version=metadata.schema_version,
+            session_id=metadata.session_id,
+            name=metadata.name,
+            created_at=metadata.created_at,
+            updated_at=last_command.timestamp,
+            canvas=metadata.canvas,
+            paths=metadata.paths,
+        )
+        write_mutated_session(
+            session_path=resolved,
+            metadata=updated_metadata,
+            scene=scene,
+            commands=commands,
+        )
+
+    return BatchResult(
+        applied=len(results),
+        failed=failed,
+        results=results,
+        session_path=str(resolved),
+        scene_object_count=len(scene.objects),
+        latest_render=str(resolved / updated_metadata.paths.latest_render),
+    )

@@ -102,7 +102,9 @@ def edit_object(
         existing_type = str(existing["type"])
         expected_command = f"edit.{existing_type}"
         if command_op != expected_command:
-            raise CommandValidationError(f"object {target_id} is not compatible with edit command")
+            raise CommandValidationError(
+                f"object {target_id} is type '{existing_type}', not compatible with '{command_op}'"
+            )
         updated.append(apply_edit(existing=existing, payload=payload, session_path=session_path))
         found = True
 

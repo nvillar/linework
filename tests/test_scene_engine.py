@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from PIL import Image, ImageChops
 
 from mural.storage.session import (
@@ -29,7 +30,9 @@ def create_test_session(tmp_path: Path) -> Path:
     return session_path
 
 
-def test_draw_rect_updates_scene_commands_and_render(tmp_path: Path, monkeypatch: object) -> None:
+def test_draw_rect_updates_scene_commands_and_render(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from mural import config
 
     monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
@@ -70,7 +73,7 @@ def test_draw_rect_updates_scene_commands_and_render(tmp_path: Path, monkeypatch
 
 def test_edit_delete_undo_preserve_append_only_history(
     tmp_path: Path,
-    monkeypatch: object,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from mural import config
 
@@ -105,7 +108,7 @@ def test_edit_delete_undo_preserve_append_only_history(
     assert scene.objects[0]["fill"] == "#0000FF"
 
 
-def test_undo_without_history_fails(tmp_path: Path, monkeypatch: object) -> None:
+def test_undo_without_history_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from mural import config
 
     monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
@@ -121,7 +124,9 @@ def test_undo_without_history_fails(tmp_path: Path, monkeypatch: object) -> None
         raise AssertionError("undo without history should fail")
 
 
-def test_object_ids_are_not_reused_after_undo(tmp_path: Path, monkeypatch: object) -> None:
+def test_object_ids_are_not_reused_after_undo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from mural import config
 
     monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
@@ -142,7 +147,9 @@ def test_object_ids_are_not_reused_after_undo(tmp_path: Path, monkeypatch: objec
     assert result.object_id == "obj_000002"
 
 
-def test_renderer_supports_multiple_primitives(tmp_path: Path, monkeypatch: object) -> None:
+def test_renderer_supports_multiple_primitives(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from mural import config
 
     monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
@@ -177,7 +184,7 @@ def test_renderer_supports_multiple_primitives(tmp_path: Path, monkeypatch: obje
 
 def test_draw_image_uses_session_local_asset_and_natural_size(
     tmp_path: Path,
-    monkeypatch: object,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from mural import config
 
@@ -203,7 +210,9 @@ def test_draw_image_uses_session_local_asset_and_natural_size(
         assert rendered.getpixel((32, 42)) == (0, 0, 255, 255)
 
 
-def test_commands_jsonl_is_valid_jsonl_after_mutations(tmp_path: Path, monkeypatch: object) -> None:
+def test_commands_jsonl_is_valid_jsonl_after_mutations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     from mural import config
 
     monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")

@@ -2,17 +2,15 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from PIL import Image
 
+from mural.constants import HEX_COLOR
 from mural.core.errors import CommandValidationError
 
 ObjectDict = dict[str, object]
-
-_HEX_COLOR = re.compile(r"^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$")
 
 
 def build_object(
@@ -161,7 +159,7 @@ def require_bool(value: object, *, field: str) -> bool:
 def normalize_color(value: object, *, field: str) -> str:
     """Normalize a required hex color."""
     text = require_string(value, field=field).upper()
-    if not _HEX_COLOR.fullmatch(text):
+    if not HEX_COLOR.fullmatch(text):
         raise CommandValidationError(f"{field} must be #RRGGBB or #RRGGBBAA")
     return text
 
@@ -353,8 +351,22 @@ def _build_image(
 
 
 def resolve_asset_path(*, session_path: Path, asset_path: str) -> Path:
-    """Resolve a session-local image asset path."""
+    """Resolve a session-local image asset path.
+
+    Only relative paths that resolve inside the session directory are accepted.
+    """
     candidate = Path(asset_path)
     if candidate.is_absolute():
-        return candidate
-    return (session_path / candidate).resolve()
+        raise CommandValidationError(
+            f"asset_path must be relative, got absolute path: {asset_path}"
+        )
+
+    resolved = (session_path / candidate).resolve()
+    session_resolved = session_path.resolve()
+    try:
+        resolved.relative_to(session_resolved)
+    except ValueError:
+        raise CommandValidationError(
+            f"asset_path must resolve inside the session directory: {asset_path}"
+        )
+    return resolved
