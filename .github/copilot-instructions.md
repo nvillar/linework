@@ -19,29 +19,33 @@ status diary. This file governs *how* work is done.
 
 ## 2. Python and environment rules
 
-These rules are **non-negotiable**. Violations break the project and pollute the
-system Python installation.
+These rules are **non-negotiable**. They apply to every context: the repository
+working directory, `/tmp`, integration test helpers, one-off checks, and any other
+directory. Violations break the project and pollute the system Python installation.
 
-### Never use bare `python` or `python3`
+### The single rule: always use `uv run`
 
-Do **not** invoke `python`, `python3`, `pip`, or `pip3` directly — not for running
-scripts, not for running tests, not for one-off checks, not for anything.
-
-Always use `uv run` to execute Python code:
+Every Python invocation — scripts, tests, linters, type checkers, one-line checks,
+REPL sessions — must go through `uv run`. There are no exceptions.
 
 ```bash
-# CORRECT
+# CORRECT — always
 uv run pytest
 uv run python -c "print('hello')"
 uv run mypy src
+uv run ruff check .
 
-# WRONG — strictly forbidden
+# WRONG — never, in any directory, for any reason
 python -m pytest
 python3 tests/test_foo.py
+python -c "import mural"
 pip install somepackage
 ```
 
-### Always use `uv` for environment and dependency management
+Do **not** invoke `python`, `python3`, `pip`, or `pip3` directly — not in the repo,
+not in `/tmp`, not in a subprocess, not for anything.
+
+### Environment and dependency management
 
 ```bash
 uv sync                       # install/update dependencies
@@ -62,18 +66,20 @@ If you need a temporary directory (e.g., for integration tests, scratch work, or
 isolated test runs), you **must** follow these rules:
 
 1. Use `/tmp/mural/` as the dedicated temporary directory (not `/tmp/` directly).
-2. **Create a dedicated `.venv` inside `/tmp/mural/`** so that any Python execution
-   there does not touch the system-wide Python installation.
-3. Use `uv` to manage that environment:
+2. **Create a dedicated `.venv` inside `/tmp/mural/`** before running any Python.
+3. **Use `uv run` for all Python execution in that directory** — the same rule as
+   in the repository. Creating the venv is not enough; you must still use `uv run`.
 
 ```bash
 mkdir -p /tmp/mural
 cd /tmp/mural
 uv venv .venv --python 3.12
-# Then use `uv run` for all Python commands in that directory
+uv run python -c "print('ready')"   # correct
+uv run pytest                        # correct
+# python -c "print('wrong')"        # WRONG — never use bare python
 ```
 
-4. Never run `python` or `python3` in `/tmp/` without a `uv`-managed venv active.
+4. Never run `python` or `python3` in `/tmp/` without going through `uv run`.
 5. Clean up `/tmp/mural/` when done if appropriate.
 
 ### Why this matters
