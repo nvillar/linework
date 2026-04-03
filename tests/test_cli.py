@@ -11,22 +11,22 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from mural.bootstrap import BOOTSTRAP_TEXT
-from mural.config import locks_root
-from mural.storage.ids import format_object_id, format_operation_id
-from mural.storage.lock import SessionLockedError, writer_lock
-from mural.storage.session import create_session
-from mural.watch import DEFAULT_INTERVAL_MS, WatchUnavailableError
+from linework.bootstrap import BOOTSTRAP_TEXT
+from linework.config import locks_root
+from linework.storage.ids import format_object_id, format_operation_id
+from linework.storage.lock import SessionLockedError, writer_lock
+from linework.storage.session import create_session
+from linework.watch import DEFAULT_INTERVAL_MS, WatchUnavailableError
 
 
 def run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    """Run the mural CLI in a subprocess."""
+    """Run the linework CLI in a subprocess."""
     command_env = os.environ.copy()
     if env is not None:
         command_env.update(env)
 
     return subprocess.run(
-        [sys.executable, "-m", "mural", *args],
+        [sys.executable, "-m", "linework", *args],
         check=False,
         capture_output=True,
         text=True,
@@ -35,7 +35,7 @@ def run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.Complet
 
 
 def test_main_without_args_prints_bootstrap(capsys: pytest.CaptureFixture[str]) -> None:
-    from mural.cli import main
+    from linework.cli import main
 
     exit_code = main([])
 
@@ -84,7 +84,7 @@ def test_watch_missing_session_reports_plain_error(tmp_path: Path) -> None:
         "watch",
         "--session",
         str(tmp_path / "missing-session"),
-        env={"MURAL_HOME": str(tmp_path / "mural-home")},
+        env={"LINEWORK_HOME": str(tmp_path / "linework-home")},
     )
 
     assert result.returncode == 1
@@ -98,7 +98,7 @@ def test_new_uses_explicit_session_path(tmp_path: Path) -> None:
         "new",
         "--session",
         str(session_path),
-        env={"MURAL_HOME": str(tmp_path / "mural-home")},
+        env={"LINEWORK_HOME": str(tmp_path / "linework-home")},
     )
 
     assert result.returncode == 0
@@ -119,9 +119,9 @@ def test_new_uses_explicit_session_path(tmp_path: Path) -> None:
         assert image.size == (1200, 800)
 
 
-def test_new_without_session_uses_mural_home(tmp_path: Path) -> None:
-    mural_home = tmp_path / "mural-home"
-    result = run_cli("new", "--json", env={"MURAL_HOME": str(mural_home)})
+def test_new_without_session_uses_linework_home(tmp_path: Path) -> None:
+    linework_home = tmp_path / "linework-home"
+    result = run_cli("new", "--json", env={"LINEWORK_HOME": str(linework_home)})
 
     assert result.returncode == 0
     assert result.stderr == ""
@@ -129,7 +129,7 @@ def test_new_without_session_uses_mural_home(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     session_path = Path(payload["session_path"])
 
-    assert session_path.parent == mural_home / "sessions"
+    assert session_path.parent == linework_home / "sessions"
     assert session_path.name.endswith("-session")
     assert payload["session_id"] == session_path.name
     assert payload["name"] == "session"
@@ -143,13 +143,13 @@ def test_new_without_session_uses_mural_home(tmp_path: Path) -> None:
 
 
 def test_new_normalizes_slug_from_name(tmp_path: Path) -> None:
-    mural_home = tmp_path / "mural-home"
+    linework_home = tmp_path / "linework-home"
     result = run_cli(
         "new",
         "--name",
         "Idea Board 01",
         "--json",
-        env={"MURAL_HOME": str(mural_home)},
+        env={"LINEWORK_HOME": str(linework_home)},
     )
 
     assert result.returncode == 0
@@ -166,7 +166,7 @@ def test_new_rejects_existing_session_path(tmp_path: Path) -> None:
         "new",
         "--session",
         str(session_path),
-        env={"MURAL_HOME": str(tmp_path / "mural-home")},
+        env={"LINEWORK_HOME": str(tmp_path / "linework-home")},
     )
 
     assert result.returncode == 1
@@ -182,7 +182,7 @@ def test_new_rejects_invalid_background(tmp_path: Path) -> None:
         str(session_path),
         "--background",
         "red",
-        env={"MURAL_HOME": str(tmp_path / "mural-home")},
+        env={"LINEWORK_HOME": str(tmp_path / "linework-home")},
     )
 
     assert result.returncode == 1
@@ -193,7 +193,7 @@ def test_new_rejects_invalid_background(tmp_path: Path) -> None:
 def test_watch_launches_watcher_with_requested_interval(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from mural import cli
+    from linework import cli
 
     session_path = tmp_path / "watch-session"
     create_session(
@@ -226,7 +226,7 @@ def test_watch_launches_watcher_with_requested_interval(
 def test_new_watch_creates_session_before_launching_watcher(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from mural import cli
+    from linework import cli
 
     session_path = tmp_path / "watched-session"
     seen: dict[str, object] = {}
@@ -263,7 +263,7 @@ def test_new_watch_creates_session_before_launching_watcher(
 def test_new_watch_json_reports_session_when_watcher_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from mural import cli
+    from linework import cli
 
     session_path = tmp_path / "watched-session"
 
@@ -287,7 +287,7 @@ def test_new_watch_json_reports_session_when_watcher_fails(
 def test_new_watch_json_emits_session_before_watcher_runs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from mural import cli
+    from linework import cli
 
     session_path = tmp_path / "watched-session"
     seen: dict[str, object] = {}
@@ -321,9 +321,9 @@ def test_new_watch_json_emits_session_before_watcher_runs(
 def test_writer_lock_blocks_overlapping_access(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from mural import config
+    from linework import config
 
-    monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
     session_path = tmp_path / "locked-session"
 
     with writer_lock(session_path):

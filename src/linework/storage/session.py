@@ -10,16 +10,16 @@ from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
 
-from mural.config import sessions_root
-from mural.constants import HEX_COLOR
-from mural.core.commands import normalize_command
-from mural.core.errors import SceneEngineError
-from mural.core.objects import resolve_asset_path
-from mural.core.scene import derive_scene
-from mural.render.png import render_blank_canvas, render_scene
-from mural.storage.ids import build_session_id, iso_timestamp, normalize_slug, utc_now
-from mural.storage.lock import writer_lock
-from mural.storage.models import (
+from linework.config import sessions_root
+from linework.constants import HEX_COLOR
+from linework.core.commands import normalize_command
+from linework.core.errors import SceneEngineError
+from linework.core.objects import resolve_asset_path
+from linework.core.scene import derive_scene
+from linework.render.png import render_blank_canvas, render_scene
+from linework.storage.ids import build_session_id, iso_timestamp, normalize_slug, utc_now
+from linework.storage.lock import writer_lock
+from linework.storage.models import (
     BatchResult,
     Canvas,
     CommandRecord,

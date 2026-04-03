@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageChops
 
-from mural.storage.session import (
+from linework.storage.session import (
     apply_mutation,
     create_session,
     read_commands,
@@ -33,9 +33,9 @@ def create_test_session(tmp_path: Path) -> Path:
 def test_draw_rect_updates_scene_commands_and_render(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from mural import config
+    from linework import config
 
-    monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
     session_path = create_test_session(tmp_path)
 
     result = apply_mutation(
@@ -75,9 +75,9 @@ def test_edit_delete_undo_preserve_append_only_history(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from mural import config
+    from linework import config
 
-    monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
     session_path = create_test_session(tmp_path)
 
     apply_mutation(
@@ -109,12 +109,12 @@ def test_edit_delete_undo_preserve_append_only_history(
 
 
 def test_undo_without_history_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from mural import config
+    from linework import config
 
-    monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
     session_path = create_test_session(tmp_path)
 
-    from mural.core.errors import CommandValidationError
+    from linework.core.errors import CommandValidationError
 
     try:
         apply_mutation(session_path, op="undo")
@@ -127,9 +127,9 @@ def test_undo_without_history_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPa
 def test_object_ids_are_not_reused_after_undo(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from mural import config
+    from linework import config
 
-    monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
     session_path = create_test_session(tmp_path)
 
     apply_mutation(
@@ -150,9 +150,9 @@ def test_object_ids_are_not_reused_after_undo(
 def test_renderer_supports_multiple_primitives(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from mural import config
+    from linework import config
 
-    monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
     session_path = create_test_session(tmp_path)
 
     apply_mutation(
@@ -186,9 +186,9 @@ def test_draw_image_uses_session_local_asset_and_natural_size(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from mural import config
+    from linework import config
 
-    monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
     session_path = create_test_session(tmp_path)
     asset_path = session_path / "assets" / "sample.png"
 
@@ -214,9 +214,9 @@ def test_draw_image_normalizes_stored_asset_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from mural import config
+    from linework import config
 
-    monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
     session_path = create_test_session(tmp_path)
     asset_path = session_path / "assets" / "sample.png"
 
@@ -236,9 +236,9 @@ def test_draw_image_normalizes_stored_asset_path(
 def test_commands_jsonl_is_valid_jsonl_after_mutations(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from mural import config
+    from linework import config
 
-    monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
     session_path = create_test_session(tmp_path)
 
     apply_mutation(

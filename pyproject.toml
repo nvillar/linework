@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mural"
+name = "linework"
 version = "0.1.0"
 description = "Agent-first CLI sketch tool."
 readme = "SPEC.md"
@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
-mural = "mural.cli:main"
+linework = "linework.cli:main"
 
 [dependency-groups]
 dev = [

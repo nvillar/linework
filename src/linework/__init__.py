@@ -1,4 +1,4 @@
-"""Mural package."""
+"""Linework package."""
 
 __all__ = ["__version__"]
 

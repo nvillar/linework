@@ -6,19 +6,19 @@ import os
 from pathlib import Path
 
 
-def mural_home() -> Path:
-    """Return the machine-local mural home directory."""
-    configured_home = os.environ.get("MURAL_HOME")
+def linework_home() -> Path:
+    """Return the machine-local linework home directory."""
+    configured_home = os.environ.get("LINEWORK_HOME")
     if configured_home:
         return Path(configured_home).expanduser().resolve()
-    return (Path.home() / ".mural").resolve()
+    return (Path.home() / ".linework").resolve()
 
 
 def sessions_root() -> Path:
     """Return the root directory for auto-created sessions."""
-    return mural_home() / "sessions"
+    return linework_home() / "sessions"
 
 
 def locks_root() -> Path:
     """Return the root directory for writer locks."""
-    return mural_home() / "locks"
+    return linework_home() / "locks"

@@ -1,6 +1,6 @@
-# Copilot Instructions for Mural
+# Copilot Instructions for Linework
 
-This document is the authoritative guide for agents working on mural. It contains
+This document is the authoritative guide for agents working on linework. It contains
 all development rules, workflow processes, and validation requirements.
 
 `SPEC.md` is the product definition. `DEVELOPMENT.md` is the milestone roadmap and
@@ -42,7 +42,7 @@ uv run ruff check .
 # WRONG — uses the system Python
 python -m pytest
 python3 tests/test_foo.py
-python -c "import mural"
+python -c "import linework"
 pip install somepackage
 ```
 
@@ -69,20 +69,20 @@ activate, or reference any other virtual environment for project work.
 If you need a temporary directory (e.g., for integration tests, scratch work, or
 isolated test runs), you **must** follow these rules:
 
-1. Use `/tmp/mural/` as the dedicated temporary directory (not `/tmp/` directly).
+1. Use `/tmp/linework/` as the dedicated temporary directory (not `/tmp/` directly).
 2. Create a `uv`-managed `.venv` there so that `uv run` resolves to the correct
    Python version instead of falling back to the system interpreter.
 3. Use `uv run` for all Python execution, same as in the repository.
 
 ```bash
-mkdir -p /tmp/mural
-cd /tmp/mural
+mkdir -p /tmp/linework
+cd /tmp/linework
 uv venv .venv --python 3.12
 uv run python -c "print('ready')"   # uses project Python 3.12
 uv run pytest                        # uses project Python 3.12
 ```
 
-4. Clean up `/tmp/mural/` when done if appropriate.
+4. Clean up `/tmp/linework/` when done if appropriate.
 
 ## 4. Milestone workflow
 
@@ -146,11 +146,11 @@ export UV_CACHE_DIR=.uv-cache
 export UV_PYTHON_INSTALL_DIR=.uv-python
 ```
 
-For local testing or constrained environments, `MURAL_HOME` may also be set to
-override the default machine-local `~/.mural` root.
+For local testing or constrained environments, `LINEWORK_HOME` may also be set to
+override the default machine-local `~/.linework` root.
 
 These are environment workarounds for development tooling. They do not change the
-runtime or packaging requirements of `mural`.
+runtime or packaging requirements of `linework`.
 
 ## 7. Agent interaction guidelines
 

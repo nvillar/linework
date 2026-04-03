@@ -8,8 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from mural.storage.models import SceneSnapshot
-from mural.storage.session import apply_batch, create_session, export_session, read_scene_snapshot
+from linework.storage.models import SceneSnapshot
+from linework.storage.session import (
+    apply_batch,
+    create_session,
+    export_session,
+    read_scene_snapshot,
+)
 
 FIXTURES_ROOT = Path(__file__).parent / "fixtures" / "regressions"
 FIXTURE_CASES = sorted(path for path in FIXTURES_ROOT.iterdir() if path.is_dir())

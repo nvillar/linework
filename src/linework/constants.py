@@ -1,4 +1,4 @@
-"""Shared constants for the mural package."""
+"""Shared constants for the linework package."""
 
 from __future__ import annotations
 

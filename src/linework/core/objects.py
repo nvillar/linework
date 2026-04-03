@@ -7,8 +7,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from mural.constants import HEX_COLOR
-from mural.core.errors import CommandValidationError
+from linework.constants import HEX_COLOR
+from linework.core.errors import CommandValidationError
 
 ObjectDict = dict[str, object]
 

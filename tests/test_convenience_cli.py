@@ -12,13 +12,13 @@ from PIL import Image
 
 
 def run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
-    """Run the mural CLI in a subprocess."""
+    """Run the linework CLI in a subprocess."""
     command_env = os.environ.copy()
     if env is not None:
         command_env.update(env)
 
     return subprocess.run(
-        [sys.executable, "-m", "mural", *args],
+        [sys.executable, "-m", "linework", *args],
         check=False,
         capture_output=True,
         text=True,
@@ -28,9 +28,9 @@ def run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.Complet
 
 def create_cli_session(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     """Create a test session through the CLI."""
-    mural_home = tmp_path / "mural-home"
+    linework_home = tmp_path / "linework-home"
     session_path = tmp_path / "cli-session"
-    env = {"MURAL_HOME": str(mural_home)}
+    env = {"LINEWORK_HOME": str(linework_home)}
 
     result = run_cli("new", "--session", str(session_path), env=env)
     assert result.returncode == 0

@@ -1,4 +1,4 @@
-"""Command-line interface for mural."""
+"""Command-line interface for linework."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
-from mural.bootstrap import BOOTSTRAP_TEXT
-from mural.core.errors import SceneEngineError
-from mural.storage.lock import SessionLockedError
-from mural.storage.models import CreatedSession, MutationResult
-from mural.storage.session import (
+from linework.bootstrap import BOOTSTRAP_TEXT
+from linework.core.errors import SceneEngineError
+from linework.storage.lock import SessionLockedError
+from linework.storage.models import CreatedSession, MutationResult
+from linework.storage.session import (
     SessionError,
     apply_batch,
     apply_imported_image,
@@ -21,24 +21,24 @@ from mural.storage.session import (
     export_session,
     inspect_session,
 )
-from mural.watch import DEFAULT_INTERVAL_MS, WatchError, create_session_watcher, watch_session
+from linework.watch import DEFAULT_INTERVAL_MS, WatchError, create_session_watcher, watch_session
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level argument parser."""
     parser = argparse.ArgumentParser(
-        prog="mural",
+        prog="linework",
         description="Agent-first CLI sketch tool.",
     )
     parser.add_argument(
         "--version",
         action="store_true",
-        help="Print the installed mural version and exit.",
+        help="Print the installed linework version and exit.",
     )
     subparsers = parser.add_subparsers(dest="command")
 
     # --- new ---
-    new_parser = subparsers.add_parser("new", help="Create a new mural session.")
+    new_parser = subparsers.add_parser("new", help="Create a new linework session.")
     new_parser.add_argument("--session", help="Explicit session directory path.")
     new_parser.add_argument("--name", help="Human-readable session name.")
     new_parser.add_argument("--width", type=int, default=1200, help="Canvas width in pixels.")
@@ -127,7 +127,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(effective_argv)
 
     if args.version:
-        from mural import __version__
+        from linework import __version__
 
         print(__version__)
         return 0
@@ -277,7 +277,7 @@ def _parse_point(value: str) -> list[float]:
 
 
 def _add_draw_line_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Add the ``mural draw line`` parser."""
+    """Add the ``linework draw line`` parser."""
     parser = subparsers.add_parser("line", help="Draw a line.")
     _add_session_argument(parser)
     _add_line_geometry(parser, required=True)
@@ -306,7 +306,7 @@ def _add_draw_rect_like_parser(
 def _add_draw_polyline_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
-    """Add the ``mural draw polyline`` parser."""
+    """Add the ``linework draw polyline`` parser."""
     parser = subparsers.add_parser("polyline", help="Draw a polyline.")
     _add_session_argument(parser)
     _add_polyline_points(parser, required=True)
@@ -318,7 +318,7 @@ def _add_draw_polyline_parser(
 
 
 def _add_draw_text_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Add the ``mural draw text`` parser."""
+    """Add the ``linework draw text`` parser."""
     parser = subparsers.add_parser("text", help="Draw a text label.")
     _add_session_argument(parser)
     _add_text_geometry(parser, required=True)
@@ -330,7 +330,7 @@ def _add_draw_text_parser(subparsers: argparse._SubParsersAction[argparse.Argume
 
 
 def _add_draw_image_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Add the ``mural draw image`` parser."""
+    """Add the ``linework draw image`` parser."""
     parser = subparsers.add_parser("image", help="Draw an imported image.")
     _add_session_argument(parser)
     parser.add_argument("--source", required=True, help="Path to the source image file.")
@@ -344,7 +344,7 @@ def _add_draw_image_parser(subparsers: argparse._SubParsersAction[argparse.Argum
 
 
 def _add_edit_line_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Add the ``mural edit line`` parser."""
+    """Add the ``linework edit line`` parser."""
     parser = subparsers.add_parser("line", help="Edit a line.")
     _add_edit_common_arguments(parser)
     _add_line_geometry(parser, required=False)
@@ -367,7 +367,7 @@ def _add_edit_rect_like_parser(
 def _add_edit_polyline_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
-    """Add the ``mural edit polyline`` parser."""
+    """Add the ``linework edit polyline`` parser."""
     parser = subparsers.add_parser("polyline", help="Edit a polyline.")
     _add_edit_common_arguments(parser)
     _add_polyline_points(parser, required=False)
@@ -376,7 +376,7 @@ def _add_edit_polyline_parser(
 
 
 def _add_edit_text_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Add the ``mural edit text`` parser."""
+    """Add the ``linework edit text`` parser."""
     parser = subparsers.add_parser("text", help="Edit a text object.")
     _add_edit_common_arguments(parser)
     _add_text_geometry(parser, required=False)
@@ -385,7 +385,7 @@ def _add_edit_text_parser(subparsers: argparse._SubParsersAction[argparse.Argume
 
 
 def _add_edit_image_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
-    """Add the ``mural edit image`` parser."""
+    """Add the ``linework edit image`` parser."""
     parser = subparsers.add_parser("image", help="Edit an image object.")
     _add_edit_common_arguments(parser)
     _add_rect_like_geometry(parser, required=False)
@@ -608,12 +608,12 @@ def _undo_summary(result: MutationResult) -> str:
 
 
 # ---------------------------------------------------------------------------
-# mural new
+# linework new
 # ---------------------------------------------------------------------------
 
 
 def cmd_new(args: argparse.Namespace) -> int:
-    """Handle ``mural new``."""
+    """Handle ``linework new``."""
     try:
         result = create_session(
             session=args.session,
@@ -649,12 +649,12 @@ def cmd_new(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
-# mural run
+# linework run
 # ---------------------------------------------------------------------------
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    """Handle ``mural run``."""
+    """Handle ``linework run``."""
     try:
         operations = _read_jsonl(args.file)
     except (OSError, ValueError) as exc:
@@ -700,12 +700,12 @@ def _read_jsonl(file_path: str | None) -> list[dict[str, object]]:
 
 
 # ---------------------------------------------------------------------------
-# mural inspect
+# linework inspect
 # ---------------------------------------------------------------------------
 
 
 def cmd_inspect(args: argparse.Namespace) -> int:
-    """Handle ``mural inspect``."""
+    """Handle ``linework inspect``."""
     try:
         result = inspect_session(args.session)
     except (OSError, SessionError) as exc:
@@ -756,12 +756,12 @@ def _format_geometry(obj: dict[str, object]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# mural export
+# linework export
 # ---------------------------------------------------------------------------
 
 
 def cmd_export(args: argparse.Namespace) -> int:
-    """Handle ``mural export``."""
+    """Handle ``linework export``."""
     try:
         exported_path = export_session(args.session, out=args.out)
     except (OSError, SessionError) as exc:
@@ -776,12 +776,12 @@ def cmd_export(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
-# mural watch
+# linework watch
 # ---------------------------------------------------------------------------
 
 
 def cmd_watch(args: argparse.Namespace) -> int:
-    """Handle ``mural watch``."""
+    """Handle ``linework watch``."""
     try:
         watch_session(args.session, interval_ms=args.interval_ms)
     except (OSError, SessionError, WatchError) as exc:
@@ -795,7 +795,7 @@ def cmd_watch(args: argparse.Namespace) -> int:
 
 
 def cmd_draw(args: argparse.Namespace) -> int:
-    """Handle ``mural draw``."""
+    """Handle ``linework draw``."""
     try:
         payload = _build_draw_payload(args)
     except ValueError as exc:
@@ -822,7 +822,7 @@ def cmd_draw(args: argparse.Namespace) -> int:
 
 
 def cmd_edit(args: argparse.Namespace) -> int:
-    """Handle ``mural edit``."""
+    """Handle ``linework edit``."""
     try:
         payload = _build_edit_payload(args)
     except ValueError as exc:
@@ -837,7 +837,7 @@ def cmd_edit(args: argparse.Namespace) -> int:
 
 
 def cmd_delete(args: argparse.Namespace) -> int:
-    """Handle ``mural delete``."""
+    """Handle ``linework delete``."""
     return _apply_single_operation(
         session=args.session,
         op="delete",
@@ -848,7 +848,7 @@ def cmd_delete(args: argparse.Namespace) -> int:
 
 
 def cmd_undo(args: argparse.Namespace) -> int:
-    """Handle ``mural undo``."""
+    """Handle ``linework undo``."""
     return _apply_single_operation(
         session=args.session,
         op="undo",

@@ -7,9 +7,9 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from mural.storage.lock import writer_lock
-from mural.storage.session import create_session
-from mural.watch import (
+from linework.storage.lock import writer_lock
+from linework.storage.session import create_session
+from linework.watch import (
     RetryableWatchError,
     WatchError,
     compute_initial_window_size,
@@ -102,7 +102,7 @@ def test_load_render_image_skips_unchanged_render(tmp_path: Path) -> None:
 def test_load_render_image_retries_when_render_changes_mid_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import mural.watch as watch_module
+    import linework.watch as watch_module
 
     render_path = tmp_path / "latest.png"
     Image.new("RGBA", (12, 8), (0, 255, 0, 255)).save(render_path, format="PNG")

@@ -11,18 +11,18 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from mural.storage.session import apply_batch, create_session, export_session, inspect_session
+from linework.storage.session import apply_batch, create_session, export_session, inspect_session
 
 
 def run_cli(
     *args: str, env: dict[str, str] | None = None, stdin: str | None = None
 ) -> subprocess.CompletedProcess[str]:
-    """Run the mural CLI in a subprocess."""
+    """Run the linework CLI in a subprocess."""
     command_env = os.environ.copy()
     if env is not None:
         command_env.update(env)
     return subprocess.run(
-        [sys.executable, "-m", "mural", *args],
+        [sys.executable, "-m", "linework", *args],
         check=False,
         capture_output=True,
         text=True,
@@ -33,9 +33,9 @@ def run_cli(
 
 def make_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Create a small test session and return its path."""
-    from mural import config
+    from linework import config
 
-    monkeypatch.setattr(config, "mural_home", lambda: tmp_path / "mural-home")
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
     session_path = tmp_path / "test-session"
     create_session(
         session=str(session_path),
@@ -48,7 +48,7 @@ def make_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# mural run (API level)
+# linework run (API level)
 # ---------------------------------------------------------------------------
 
 
@@ -130,7 +130,7 @@ class TestApplyBatch:
 
 
 # ---------------------------------------------------------------------------
-# mural inspect (API level)
+# linework inspect (API level)
 # ---------------------------------------------------------------------------
 
 
@@ -167,7 +167,7 @@ class TestInspectSession:
 
 
 # ---------------------------------------------------------------------------
-# mural export (API level)
+# linework export (API level)
 # ---------------------------------------------------------------------------
 
 
@@ -182,19 +182,19 @@ class TestExportSession:
 
 
 # ---------------------------------------------------------------------------
-# CLI integration: mural run
+# CLI integration: linework run
 # ---------------------------------------------------------------------------
 
 
 class TestRunCLI:
     def test_run_from_stdin_json(self, tmp_path: Path) -> None:
-        mural_home = tmp_path / "mural-home"
+        linework_home = tmp_path / "linework-home"
         session_path = tmp_path / "cli-session"
         run_cli(
             "new",
             "--session",
             str(session_path),
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
         )
         jsonl = (
             '{"op":"draw.rect","payload":{"x":10,"y":10,"width":50,"height":30}}\n'
@@ -205,7 +205,7 @@ class TestRunCLI:
             "--session",
             str(session_path),
             "--json",
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
             stdin=jsonl,
         )
         assert result.returncode == 0
@@ -216,13 +216,13 @@ class TestRunCLI:
         assert payload["results"][0]["object_id"] == "obj_000001"
 
     def test_run_partial_failure_json(self, tmp_path: Path) -> None:
-        mural_home = tmp_path / "mural-home"
+        linework_home = tmp_path / "linework-home"
         session_path = tmp_path / "cli-session"
         run_cli(
             "new",
             "--session",
             str(session_path),
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
         )
         jsonl = (
             '{"op":"draw.rect","payload":{"x":10,"y":10,"width":50,"height":30}}\n'
@@ -233,7 +233,7 @@ class TestRunCLI:
             "--session",
             str(session_path),
             "--json",
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
             stdin=jsonl,
         )
         assert result.returncode == 1
@@ -243,13 +243,13 @@ class TestRunCLI:
         assert payload["failed"]["op"] == "bad.op"
 
     def test_run_from_file(self, tmp_path: Path) -> None:
-        mural_home = tmp_path / "mural-home"
+        linework_home = tmp_path / "linework-home"
         session_path = tmp_path / "cli-session"
         run_cli(
             "new",
             "--session",
             str(session_path),
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
         )
         jsonl_file = tmp_path / "ops.jsonl"
         jsonl_file.write_text(
@@ -263,7 +263,7 @@ class TestRunCLI:
             "--file",
             str(jsonl_file),
             "--json",
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
         )
         assert result.returncode == 0
         payload = json.loads(result.stdout)
@@ -271,26 +271,26 @@ class TestRunCLI:
 
 
 # ---------------------------------------------------------------------------
-# CLI integration: mural inspect
+# CLI integration: linework inspect
 # ---------------------------------------------------------------------------
 
 
 class TestInspectCLI:
     def test_inspect_json(self, tmp_path: Path) -> None:
-        mural_home = tmp_path / "mural-home"
+        linework_home = tmp_path / "linework-home"
         session_path = tmp_path / "cli-session"
         run_cli(
             "new",
             "--session",
             str(session_path),
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
         )
         result = run_cli(
             "inspect",
             "--session",
             str(session_path),
             "--json",
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
         )
         assert result.returncode == 0
         payload = json.loads(result.stdout)
@@ -300,32 +300,32 @@ class TestInspectCLI:
         assert "latest_render" in payload
 
     def test_inspect_human_readable(self, tmp_path: Path) -> None:
-        mural_home = tmp_path / "mural-home"
+        linework_home = tmp_path / "linework-home"
         session_path = tmp_path / "cli-session"
         run_cli(
             "new",
             "--session",
             str(session_path),
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
         )
         result = run_cli(
             "inspect",
             "--session",
             str(session_path),
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
         )
         assert result.returncode == 0
         assert "Session: cli-session" in result.stdout
         assert "Canvas: 1200x800" in result.stdout
 
     def test_inspect_missing_session_json_error(self, tmp_path: Path) -> None:
-        mural_home = tmp_path / "mural-home"
+        linework_home = tmp_path / "linework-home"
         result = run_cli(
             "inspect",
             "--session",
             str(tmp_path / "nonexistent"),
             "--json",
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
         )
         assert result.returncode == 1
         payload = json.loads(result.stdout)
@@ -333,20 +333,20 @@ class TestInspectCLI:
 
 
 # ---------------------------------------------------------------------------
-# CLI integration: mural export
+# CLI integration: linework export
 # ---------------------------------------------------------------------------
 
 
 class TestExportCLI:
     def test_export_json(self, tmp_path: Path) -> None:
-        mural_home = tmp_path / "mural-home"
+        linework_home = tmp_path / "linework-home"
         session_path = tmp_path / "cli-session"
         out_path = tmp_path / "exported.png"
         run_cli(
             "new",
             "--session",
             str(session_path),
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
         )
         result = run_cli(
             "export",
@@ -355,7 +355,7 @@ class TestExportCLI:
             "--out",
             str(out_path),
             "--json",
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
         )
         assert result.returncode == 0
         payload = json.loads(result.stdout)
@@ -376,7 +376,7 @@ class TestJsonErrorContract:
             "--background",
             "red",
             "--json",
-            env={"MURAL_HOME": str(tmp_path / "mural-home")},
+            env={"LINEWORK_HOME": str(tmp_path / "linework-home")},
         )
         assert result.returncode == 1
         payload = json.loads(result.stdout)
@@ -385,20 +385,20 @@ class TestJsonErrorContract:
         assert result.stderr == ""
 
     def test_run_bad_jsonl_json_error(self, tmp_path: Path) -> None:
-        mural_home = tmp_path / "mural-home"
+        linework_home = tmp_path / "linework-home"
         session_path = tmp_path / "cli-session"
         run_cli(
             "new",
             "--session",
             str(session_path),
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
         )
         result = run_cli(
             "run",
             "--session",
             str(session_path),
             "--json",
-            env={"MURAL_HOME": str(mural_home)},
+            env={"LINEWORK_HOME": str(linework_home)},
             stdin="not valid json\n",
         )
         assert result.returncode == 1

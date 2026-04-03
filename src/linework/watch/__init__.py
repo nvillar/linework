@@ -8,7 +8,7 @@ from typing import Any
 
 from PIL import Image, UnidentifiedImageError
 
-from mural.storage.session import read_session_metadata
+from linework.storage.session import read_session_metadata
 
 DEFAULT_INTERVAL_MS = 250
 RenderSignature = tuple[int, int]
@@ -151,7 +151,7 @@ def load_render_image(
 
 
 class SessionWatcherApp:
-    """Minimal polling watcher window for a mural session."""
+    """Minimal polling watcher window for a linework session."""
 
     def __init__(self, *, target: WatchTarget, interval_ms: int) -> None:
         self._target = target
@@ -172,7 +172,7 @@ class SessionWatcherApp:
                 f"watcher UI is unavailable in this environment: {exc}"
             ) from exc
 
-        root.title(f"mural watch - {self._target.session_id}")
+        root.title(f"linework watch - {self._target.session_id}")
         initial_width, initial_height = compute_initial_window_size(
             canvas_width=self._target.canvas_width,
             canvas_height=self._target.canvas_height,

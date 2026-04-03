@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-from mural.config import locks_root
+from linework.config import locks_root
 
 
 class SessionLockedError(RuntimeError):

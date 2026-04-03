@@ -8,10 +8,10 @@ from typing import cast
 
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
-from mural.core.objects import resolve_asset_path
-from mural.storage.models import Canvas, SceneSnapshot
+from linework.core.objects import resolve_asset_path
+from linework.storage.models import Canvas, SceneSnapshot
 
-_DEFAULT_FONT_RESOURCE = resources.files("mural.assets").joinpath("NotoSans-Regular.ttf")
+_DEFAULT_FONT_RESOURCE = resources.files("linework.assets").joinpath("NotoSans-Regular.ttf")
 
 
 def render_blank_canvas(canvas: Canvas, output_path: Path) -> None:

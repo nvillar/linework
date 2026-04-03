@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
-from mural.core.errors import CommandValidationError, ObjectNotFoundError
-from mural.core.objects import ObjectDict, apply_edit, build_object
-from mural.storage.models import Canvas, CommandRecord, SceneSnapshot
+from linework.core.errors import CommandValidationError, ObjectNotFoundError
+from linework.core.objects import ObjectDict, apply_edit, build_object
+from linework.storage.models import Canvas, CommandRecord, SceneSnapshot
 
 
 def derive_scene(

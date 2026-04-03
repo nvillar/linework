@@ -47,22 +47,24 @@ def test_built_distributions_include_bundled_font(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
 
-    wheel_path = next(dist_dir.glob("mural-*.whl"))
+    wheel_path = next(dist_dir.glob("linework-*.whl"))
     with zipfile.ZipFile(wheel_path) as archive:
         wheel_names = archive.namelist()
 
     wheel_fonts = [
-        name for name in wheel_names if name.startswith("mural/assets/") and name.endswith(".ttf")
+        name
+        for name in wheel_names
+        if name.startswith("linework/assets/") and name.endswith(".ttf")
     ]
-    assert wheel_fonts == ["mural/assets/NotoSans-Regular.ttf"]
-    assert "mural/assets/NotoSans-OFL.txt" in wheel_names
+    assert wheel_fonts == ["linework/assets/NotoSans-Regular.ttf"]
+    assert "linework/assets/NotoSans-OFL.txt" in wheel_names
 
-    sdist_path = next(dist_dir.glob("mural-*.tar.gz"))
+    sdist_path = next(dist_dir.glob("linework-*.tar.gz"))
     with tarfile.open(sdist_path, "r:gz") as archive:
         sdist_names = archive.getnames()
 
-    assert any(name.endswith("src/mural/assets/NotoSans-Regular.ttf") for name in sdist_names)
-    assert any(name.endswith("src/mural/assets/NotoSans-OFL.txt") for name in sdist_names)
+    assert any(name.endswith("src/linework/assets/NotoSans-Regular.ttf") for name in sdist_names)
+    assert any(name.endswith("src/linework/assets/NotoSans-OFL.txt") for name in sdist_names)
 
 
 def test_uv_tool_install_from_project_runs_installed_cli(tmp_path: Path) -> None:
@@ -71,7 +73,7 @@ def test_uv_tool_install_from_project_runs_installed_cli(tmp_path: Path) -> None
     env = os.environ.copy()
     env["HOME"] = str(home_dir)
     env["UV_CACHE_DIR"] = str(cache_dir)
-    env["MURAL_HOME"] = str(tmp_path / "mural-home")
+    env["LINEWORK_HOME"] = str(tmp_path / "linework-home")
 
     install_result = _run(
         ["uv", "tool", "install", "--python", sys.executable, "--force", str(PROJECT_ROOT)],
@@ -79,7 +81,7 @@ def test_uv_tool_install_from_project_runs_installed_cli(tmp_path: Path) -> None
     )
     assert install_result.returncode == 0, install_result.stderr
 
-    binary_path = home_dir / ".local" / "bin" / "mural"
+    binary_path = home_dir / ".local" / "bin" / "linework"
     assert binary_path.is_file()
 
     version_result = _run([str(binary_path), "--version"], env=env)

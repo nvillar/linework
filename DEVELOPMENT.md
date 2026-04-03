@@ -1,6 +1,6 @@
-# Mural Development Roadmap
+# Linework Development Roadmap
 
-This document tracks milestone status and progress for mural.
+This document tracks milestone status and progress for linework.
 
 `SPEC.md` is the product definition. `.github/copilot-instructions.md` contains all
 development rules, workflow processes, and validation requirements.
@@ -26,7 +26,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 
 - `pyproject.toml`
 - `src/` layout
-- `mural` entry point
+- `linework` entry point
 - dev tooling via `uv`
 - base quality commands
 
@@ -47,27 +47,27 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 
 #### Milestone 4: Core agent loop (complete)
 
-- `mural run` (JSONL batch from stdin and `--file`)
-- `mural run --json` with per-operation results
-- `mural inspect` and `mural inspect --json`
-- `mural export --out PATH`
+- `linework run` (JSONL batch from stdin and `--file`)
+- `linework run --json` with per-operation results
+- `linework inspect` and `linework inspect --json`
+- `linework export --out PATH`
 - `--json` error output (structured JSON on stdout, exit non-zero)
 - bootstrap text rewrite: teach JSONL workflow as the primary interface
 - tests for all new commands
 
 #### Milestone 5: Convenience CLI (complete)
 
-- `mural draw line|rect|ellipse|polyline|text`
-- `mural edit line|rect|ellipse|polyline|text`
-- `mural delete --id`
-- `mural undo`
+- `linework draw line|rect|ellipse|polyline|text`
+- `linework edit line|rect|ellipse|polyline|text`
+- `linework delete --id`
+- `linework undo`
 - `--json` output for all convenience commands (single-operation `run` shape)
 - tests for all convenience commands
 
 #### Milestone 6: Image assets and portability (complete)
 
-- `mural draw image --source PATH`
-- `mural edit image`
+- `linework draw image --source PATH`
+- `linework edit image`
 - `--source PATH` import (copy into session `assets/`)
 - asset path normalization
 - original source metadata
@@ -75,8 +75,8 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 
 #### Milestone 7: Watcher (complete)
 
-- `mural watch`
-- `mural new --watch`
+- `linework watch`
+- `linework new --watch`
 - polling loop
 - image refresh
 - session ID title
@@ -99,17 +99,17 @@ Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8.
 
 Current user-facing command surface:
 
-- `mural` (no-arg bootstrap)
-- `mural --version`
-- `mural new`
-- `mural run` (JSONL batch — primary agent interface)
-- `mural inspect`
-- `mural export`
-- `mural watch`
-- `mural draw line|rect|ellipse|polyline|text|image`
-- `mural edit line|rect|ellipse|polyline|text|image`
-- `mural delete`
-- `mural undo`
+- `linework` (no-arg bootstrap)
+- `linework --version`
+- `linework new`
+- `linework run` (JSONL batch — primary agent interface)
+- `linework inspect`
+- `linework export`
+- `linework watch`
+- `linework draw line|rect|ellipse|polyline|text|image`
+- `linework edit line|rect|ellipse|polyline|text|image`
+- `linework delete`
+- `linework undo`
 
 Internal engine capabilities:
 
@@ -122,11 +122,11 @@ Internal engine capabilities:
 - read-only watcher window with lazy `tkinter` loading and polling refresh
 - fixture-based regression harness for blank, shapes, text, image, undo/edit/delete, and batch cases
 - automated packaging/build validation plus isolated `uv tool install` validation
-- structured `--json` output and `--json` error output for all mutation commands (`mural watch` is display-only and does not use `--json`)
+- structured `--json` output and `--json` error output for all mutation commands (`linework watch` is display-only and does not use `--json`)
 
 Implementation notes:
 
-- text rendering uses a bundled Noto Sans font shipped in `src/mural/assets/`
+- text rendering uses a bundled Noto Sans font shipped in `src/linework/assets/`
 - image rendering and export now validate session-local assets; image source replacement remains out of scope
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 

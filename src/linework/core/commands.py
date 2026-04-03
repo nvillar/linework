@@ -6,10 +6,10 @@ import re
 from collections.abc import Mapping
 from pathlib import Path
 
-from mural.core.errors import CommandValidationError, ObjectNotFoundError
-from mural.core.objects import build_object
-from mural.storage.ids import format_object_id, format_operation_id, iso_timestamp, utc_now
-from mural.storage.models import CommandRecord
+from linework.core.errors import CommandValidationError, ObjectNotFoundError
+from linework.core.objects import build_object
+from linework.storage.ids import format_object_id, format_operation_id, iso_timestamp, utc_now
+from linework.storage.models import CommandRecord
 
 _OBJECT_ID = re.compile(r"^obj_(\d{6})$")
 
@@ -50,7 +50,7 @@ def _resolve_live_objects(commands: list[CommandRecord]) -> dict[str, str]:
 
     Effective commands are those remaining after undo resolution.
     """
-    from mural.core.scene import resolve_effective_commands
+    from linework.core.scene import resolve_effective_commands
 
     effective = resolve_effective_commands(commands)
     live: dict[str, str] = {}
