@@ -11,7 +11,7 @@ from pathlib import Path
 from mural.bootstrap import BOOTSTRAP_TEXT
 from mural.core.errors import SceneEngineError
 from mural.storage.lock import SessionLockedError
-from mural.storage.models import MutationResult
+from mural.storage.models import CreatedSession, MutationResult
 from mural.storage.session import (
     SessionError,
     apply_batch,
@@ -21,6 +21,7 @@ from mural.storage.session import (
     export_session,
     inspect_session,
 )
+from mural.watch import DEFAULT_INTERVAL_MS, WatchError, create_session_watcher, watch_session
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -47,6 +48,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="#FFFFFF",
         help="Canvas background color in #RRGGBB or #RRGGBBAA form.",
     )
+    new_parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="Open the watcher after session creation.",
+    )
     new_parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
     # --- run ---
@@ -65,6 +71,16 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--session", required=True, help="Session directory path.")
     export_parser.add_argument("--out", required=True, help="Output PNG path.")
     export_parser.add_argument("--json", action="store_true", help="Print JSON output.")
+
+    # --- watch ---
+    watch_parser = subparsers.add_parser("watch", help="Open a read-only watcher window.")
+    _add_session_argument(watch_parser)
+    watch_parser.add_argument(
+        "--interval-ms",
+        type=int,
+        default=DEFAULT_INTERVAL_MS,
+        help=f"Polling interval in milliseconds (default: {DEFAULT_INTERVAL_MS}).",
+    )
 
     # --- draw ---
     draw_parser = subparsers.add_parser("draw", help="Create a single object (convenience).")
@@ -124,6 +140,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return cmd_inspect(args)
     if args.command == "export":
         return cmd_export(args)
+    if args.command == "watch":
+        return cmd_watch(args)
     if args.command == "draw":
         return cmd_draw(args)
     if args.command == "edit":
@@ -521,6 +539,18 @@ def _single_operation_payload(result: MutationResult) -> dict[str, object]:
     }
 
 
+def _emit_created_session_result(result: CreatedSession, *, use_json: bool) -> None:
+    """Emit output for a newly created session."""
+    if use_json:
+        print(json.dumps(result.to_dict(), indent=2))
+        return
+
+    print(f"Created session: {result.session_id}")
+    print(f"Session path: {result.session_path}")
+    print(f"Canvas: {result.canvas.width}x{result.canvas.height}")
+    print(f"Latest render: {result.latest_render}")
+
+
 def _apply_single_operation(
     *,
     session: str,
@@ -595,14 +625,26 @@ def cmd_new(args: argparse.Namespace) -> int:
     except (OSError, SessionError, SessionLockedError) as exc:
         return _error(str(exc), use_json=args.json)
 
-    if args.json:
-        print(json.dumps(result.to_dict(), indent=2))
+    if args.watch:
+        try:
+            watcher = create_session_watcher(
+                result.session_path,
+                interval_ms=DEFAULT_INTERVAL_MS,
+            )
+        except (OSError, SessionError, WatchError) as exc:
+            if args.json:
+                payload = {"error": str(exc), **result.to_dict()}
+                print(json.dumps(payload, indent=2))
+            else:
+                _emit_created_session_result(result, use_json=False)
+                return _error(str(exc), use_json=False)
+            return 1
+
+        _emit_created_session_result(result, use_json=args.json)
+        watcher.run()
         return 0
 
-    print(f"Created session: {result.session_id}")
-    print(f"Session path: {result.session_path}")
-    print(f"Canvas: {result.canvas.width}x{result.canvas.height}")
-    print(f"Latest render: {result.latest_render}")
+    _emit_created_session_result(result, use_json=args.json)
     return 0
 
 
@@ -730,6 +772,20 @@ def cmd_export(args: argparse.Namespace) -> int:
         return 0
 
     print(f"Exported: {exported_path}")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# mural watch
+# ---------------------------------------------------------------------------
+
+
+def cmd_watch(args: argparse.Namespace) -> int:
+    """Handle ``mural watch``."""
+    try:
+        watch_session(args.session, interval_ms=args.interval_ms)
+    except (OSError, SessionError, WatchError) as exc:
+        return _error(str(exc), use_json=False)
     return 0
 
 

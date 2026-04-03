@@ -15,6 +15,8 @@ from mural.bootstrap import BOOTSTRAP_TEXT
 from mural.config import locks_root
 from mural.storage.ids import format_object_id, format_operation_id
 from mural.storage.lock import SessionLockedError, writer_lock
+from mural.storage.session import create_session
+from mural.watch import DEFAULT_INTERVAL_MS, WatchUnavailableError
 
 
 def run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -59,12 +61,21 @@ def test_version_flag_prints_package_version() -> None:
     assert result.stderr == ""
 
 
-def test_new_help_does_not_advertise_unimplemented_watch_flag() -> None:
+def test_new_help_advertises_watch_flag() -> None:
     result = run_cli("new", "--help")
 
     assert result.returncode == 0
-    assert "--watch" not in result.stdout
+    assert "--watch" in result.stdout
     assert "--json" in result.stdout
+    assert result.stderr == ""
+
+
+def test_watch_help_lists_interval_flag() -> None:
+    result = run_cli("watch", "--help")
+
+    assert result.returncode == 0
+    assert "--session" in result.stdout
+    assert "--interval-ms" in result.stdout
     assert result.stderr == ""
 
 
@@ -164,6 +175,134 @@ def test_new_rejects_invalid_background(tmp_path: Path) -> None:
     assert result.returncode == 1
     assert result.stdout == ""
     assert "background must be" in result.stderr
+
+
+def test_watch_launches_watcher_with_requested_interval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from mural import cli
+
+    session_path = tmp_path / "watch-session"
+    create_session(
+        session=str(session_path),
+        name=None,
+        width=1200,
+        height=800,
+        background="#FFFFFF",
+    )
+
+    captured: dict[str, object] = {}
+
+    def fake_watch_session(session: str, *, interval_ms: int) -> None:
+        captured["session"] = session
+        captured["interval_ms"] = interval_ms
+
+    monkeypatch.setattr(cli, "watch_session", fake_watch_session)
+
+    exit_code = cli.main(
+        ["watch", "--session", str(session_path), "--interval-ms", str(DEFAULT_INTERVAL_MS + 50)]
+    )
+
+    assert exit_code == 0
+    assert captured == {
+        "session": str(session_path),
+        "interval_ms": DEFAULT_INTERVAL_MS + 50,
+    }
+
+
+def test_new_watch_creates_session_before_launching_watcher(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from mural import cli
+
+    session_path = tmp_path / "watched-session"
+    seen: dict[str, object] = {}
+
+    class FakeWatcher:
+        def run(self) -> None:
+            seen["ran"] = True
+
+    def fake_create_session_watcher(session: str, *, interval_ms: int) -> FakeWatcher:
+        watched_path = Path(session)
+        seen["session"] = watched_path
+        seen["interval_ms"] = interval_ms
+        seen["session_exists"] = watched_path.is_dir()
+        seen["latest_render_exists"] = (watched_path / "render" / "latest.png").is_file()
+        return FakeWatcher()
+
+    monkeypatch.setattr(cli, "create_session_watcher", fake_create_session_watcher)
+
+    exit_code = cli.main(["new", "--session", str(session_path), "--watch"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert seen == {
+        "session": session_path,
+        "interval_ms": DEFAULT_INTERVAL_MS,
+        "session_exists": True,
+        "latest_render_exists": True,
+        "ran": True,
+    }
+    assert f"Session path: {session_path}" in captured.out
+    assert captured.err == ""
+
+
+def test_new_watch_json_reports_session_when_watcher_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from mural import cli
+
+    session_path = tmp_path / "watched-session"
+
+    def fake_create_session_watcher(session: str, *, interval_ms: int) -> object:
+        raise WatchUnavailableError("tkinter is unavailable in the active Python environment")
+
+    monkeypatch.setattr(cli, "create_session_watcher", fake_create_session_watcher)
+
+    exit_code = cli.main(["new", "--session", str(session_path), "--watch", "--json"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    payload = json.loads(captured.out)
+    assert payload["error"] == "tkinter is unavailable in the active Python environment"
+    assert payload["session_path"] == str(session_path)
+    assert payload["session_id"] == "watched-session"
+    assert Path(payload["latest_render"]).is_file()
+    assert captured.err == ""
+
+
+def test_new_watch_json_emits_session_before_watcher_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from mural import cli
+
+    session_path = tmp_path / "watched-session"
+    seen: dict[str, object] = {}
+
+    class FakeWatcher:
+        def run(self) -> None:
+            payload = json.loads(capsys.readouterr().out)
+            seen["payload"] = payload
+
+    def fake_create_session_watcher(session: str, *, interval_ms: int) -> FakeWatcher:
+        seen["session"] = session
+        seen["interval_ms"] = interval_ms
+        return FakeWatcher()
+
+    monkeypatch.setattr(cli, "create_session_watcher", fake_create_session_watcher)
+
+    exit_code = cli.main(["new", "--session", str(session_path), "--watch", "--json"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert seen["session"] == str(session_path)
+    assert seen["interval_ms"] == DEFAULT_INTERVAL_MS
+    payload = seen["payload"]
+    assert isinstance(payload, dict)
+    assert payload["session_path"] == str(session_path)
+    assert payload["session_id"] == "watched-session"
+    assert captured.out == ""
+    assert captured.err == ""
 
 
 def test_writer_lock_blocks_overlapping_access(

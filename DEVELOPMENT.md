@@ -73,7 +73,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - original source metadata
 - export validation
 
-#### Milestone 7: Watcher
+#### Milestone 7: Watcher (complete)
 
 - `mural watch`
 - `mural new --watch`
@@ -82,6 +82,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - session ID title
 - sizing behavior
 - graceful `tkinter` degradation
+- transient read retry with last-good-image retention
 
 #### Milestone 8: Hardening and regression harness
 
@@ -94,7 +95,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 
 ### Current implementation status
 
-Completed milestones: 1, 2, 3, 4, 5, 6.
+Completed milestones: 1, 2, 3, 4, 5, 6, 7.
 
 Current user-facing command surface:
 
@@ -104,6 +105,7 @@ Current user-facing command surface:
 - `mural run` (JSONL batch — primary agent interface)
 - `mural inspect`
 - `mural export`
+- `mural watch`
 - `mural draw line|rect|ellipse|polyline|text|image`
 - `mural edit line|rect|ellipse|polyline|text|image`
 - `mural delete`
@@ -116,12 +118,13 @@ Internal engine capabilities:
 - scene replay from command history
 - PNG rendering for all supported primitives
 - session-local asset import/copy for image convenience commands
+- read-only watcher window with lazy `tkinter` loading and polling refresh
 - structured `--json` output and `--json` error output for all commands
 
 Implementation notes:
 
 - text rendering uses Pillow's default font; the bundled-font requirement (SPEC §3.5) is deferred to milestone 8
 - image rendering and export now validate session-local assets; image source replacement remains out of scope
-- watcher behavior and `mural new --watch` are deferred to milestone 7
+- watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 
-Next milestone: **7 — Watcher**.
+Next milestone: **8 — Hardening and regression harness**.
