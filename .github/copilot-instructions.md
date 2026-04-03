@@ -87,15 +87,15 @@ the correct Python version and isolated dependencies every time.
 
 Before implementation starts for a milestone:
 
-- create or confirm the GitHub Milestone exists
-- create the milestone tracking Issue
-- ensure the Issue has:
-  - Goal
-  - Scope
-  - Out of scope
-  - Dependencies
-  - Acceptance criteria
-  - Validation steps
+1. Create or confirm the GitHub Milestone exists.
+2. Create the milestone tracking Issue.
+3. Ensure the Issue has:
+   - Goal
+   - Scope
+   - Out of scope
+   - Dependencies
+   - Acceptance criteria
+   - Validation steps
 
 During implementation:
 
@@ -106,17 +106,17 @@ During implementation:
 
 After implementation is complete for a milestone:
 
-- run the full project validation suite
-- perform a final code review
-- review `SPEC.md` for consistency and freshness
-- update `SPEC.md` so it reflects the code as the current source of truth
-- remove stale transitional language and historical artifacts from `SPEC.md`
-- update `DEVELOPMENT.md` to reflect the new current status
-- update the milestone Issue if needed to reflect the delivered result
-- close the milestone Issue
-- commit all milestone code and documentation changes
-- push the commits to the remote repository
-- the repository must be in a clean state (no uncommitted changes) after closeout
+1. Run the full project validation suite.
+2. Perform a final code review.
+3. Review `SPEC.md` for consistency and freshness.
+4. Update `SPEC.md` so it reflects the code as the current source of truth.
+5. Remove stale transitional language and historical artifacts from `SPEC.md`.
+6. Update `DEVELOPMENT.md` to reflect the new current status.
+7. Update the milestone Issue so it reflects the delivered result.
+8. Commit all milestone code and documentation changes.
+9. Push the commits to the remote repository.
+10. Confirm the repository is in a clean state with no uncommitted changes.
+11. Close the milestone Issue only after the commit, push, and clean-state checks are complete.
 
 ## 5. Required validation commands
 
