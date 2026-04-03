@@ -17,6 +17,7 @@ Completed milestones:
 
 - Milestone 1: Repository bootstrap
 - Milestone 2: Session and storage core
+- Milestone 3: Scene engine and renderer
 
 Current implemented command surface:
 
@@ -35,6 +36,23 @@ Current implemented behavior:
 - human-readable and `--json` output for `mural new`
 - machine-local single-writer locking
 - `MURAL_HOME` override support for testing and constrained environments
+- internal append-only mutation engine for:
+  - `draw.line`
+  - `draw.rect`
+  - `draw.ellipse`
+  - `draw.polyline`
+  - `draw.text`
+  - `draw.image`
+  - `edit.*`
+  - `delete`
+  - `undo`
+- scene replay from command history
+- non-empty PNG rendering for the currently supported internal primitives
+
+Current implementation notes:
+
+- text rendering currently uses Pillow's default font; the target MVP bundled-font requirement is not yet implemented
+- image rendering currently works for already-present session-local assets; CLI asset import/copy behavior is not yet implemented
 
 Not yet implemented:
 

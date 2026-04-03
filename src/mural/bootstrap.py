@@ -30,6 +30,7 @@ Help:
   mural new --help
 
 Status:
-  Milestones 1 and 2 are complete. Session creation and storage core are implemented.
+  Milestones 1, 2, and 3 are complete.
+  User-facing commands currently implemented: mural, mural --version, mural new.
   Draw, edit, export, inspect, batch, and watcher commands are not implemented yet.
 """
