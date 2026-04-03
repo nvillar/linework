@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "session_id": "image-placement-session",
+  "canvas": {
+    "width": 120,
+    "height": 100,
+    "background": "#FFFFFF"
+  },
+  "objects": [
+    {
+      "id": "obj_000001",
+      "type": "image",
+      "visible": true,
+      "x": 14.0,
+      "y": 20.0,
+      "width": 36.0,
+      "height": 24.0,
+      "asset_path": "assets/sample.png"
+    },
+    {
+      "id": "obj_000002",
+      "type": "rect",
+      "visible": true,
+      "x": 10.0,
+      "y": 16.0,
+      "width": 44.0,
+      "height": 28.0,
+      "stroke": "#333333",
+      "stroke_width": 1.0
+    }
+  ]
+}

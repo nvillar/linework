@@ -59,6 +59,15 @@ def test_compute_initial_window_size_caps_to_screen() -> None:
     ) == (900, 700)
 
 
+def test_compute_initial_window_size_preserves_canvas_when_it_fits() -> None:
+    assert compute_initial_window_size(
+        canvas_width=400,
+        canvas_height=300,
+        screen_width=900,
+        screen_height=700,
+    ) == (400, 300)
+
+
 def test_scale_to_fit_preserves_aspect_ratio() -> None:
     assert scale_to_fit(
         content_width=1200,
@@ -66,6 +75,15 @@ def test_scale_to_fit_preserves_aspect_ratio() -> None:
         frame_width=300,
         frame_height=300,
     ) == (300, 200)
+
+
+def test_scale_to_fit_falls_back_to_original_size_for_non_positive_frame() -> None:
+    assert scale_to_fit(
+        content_width=120,
+        content_height=80,
+        frame_width=0,
+        frame_height=200,
+    ) == (120, 80)
 
 
 def test_load_render_image_skips_unchanged_render(tmp_path: Path) -> None:
@@ -99,3 +117,8 @@ def test_load_render_image_retries_when_render_changes_mid_read(
 
     with pytest.raises(RetryableWatchError, match="render changed during read"):
         load_render_image(render_path, previous_signature=None)
+
+
+def test_load_render_image_retries_when_render_is_missing(tmp_path: Path) -> None:
+    with pytest.raises(RetryableWatchError, match="unable to read render"):
+        load_render_image(tmp_path / "missing.png", previous_signature=None)

@@ -397,6 +397,7 @@ The MVP CLI has two tiers of commands:
 **Core commands** (the agent loop):
 
 - `mural` — bootstrap guide
+- `mural --version` — print the installed version
 - `mural new` — create a session
 - `mural run` — batch operations via JSONL (primary mutation interface)
 - `mural inspect` — read current session state
@@ -415,6 +416,8 @@ The convenience commands are thin wrappers. Every operation they perform is also
 ### 9.1 `mural`
 
 Invoking `mural` with no arguments must print a rich bootstrap guide and exit successfully.
+
+`mural --version` must print the installed package version and exit successfully.
 
 The bootstrap output must explain:
 

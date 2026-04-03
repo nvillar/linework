@@ -79,6 +79,19 @@ def test_watch_help_lists_interval_flag() -> None:
     assert result.stderr == ""
 
 
+def test_watch_missing_session_reports_plain_error(tmp_path: Path) -> None:
+    result = run_cli(
+        "watch",
+        "--session",
+        str(tmp_path / "missing-session"),
+        env={"MURAL_HOME": str(tmp_path / "mural-home")},
+    )
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "session does not exist" in result.stderr
+
+
 def test_new_uses_explicit_session_path(tmp_path: Path) -> None:
     session_path = tmp_path / "explicit-session"
     result = run_cli(

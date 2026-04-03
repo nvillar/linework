@@ -1,0 +1,2 @@
+{"schema_version": 1, "op_id": "op_000001", "timestamp": "2026-04-03T22:38:43Z", "op": "draw.image", "payload": {"x": 14, "y": 20, "width": 36, "asset_path": "assets/sample.png", "id": "obj_000001"}}
+{"schema_version": 1, "op_id": "op_000002", "timestamp": "2026-04-03T22:38:43Z", "op": "draw.rect", "payload": {"x": 10, "y": 16, "width": 44, "height": 28, "stroke": "#333333", "stroke_width": 1, "id": "obj_000002"}}

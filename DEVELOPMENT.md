@@ -84,7 +84,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - graceful `tkinter` degradation
 - transient read retry with last-good-image retention
 
-#### Milestone 8: Hardening and regression harness
+#### Milestone 8: Hardening and regression harness (complete)
 
 - CLI integration tests for all commands
 - render regression fixtures
@@ -95,7 +95,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 
 ### Current implementation status
 
-Completed milestones: 1, 2, 3, 4, 5, 6, 7.
+Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8.
 
 Current user-facing command surface:
 
@@ -117,14 +117,17 @@ Internal engine capabilities:
 - JSONL batch execution with single-render-at-end semantics
 - scene replay from command history
 - PNG rendering for all supported primitives
+- bundled Noto Sans default font for deterministic text rendering
 - session-local asset import/copy for image convenience commands
 - read-only watcher window with lazy `tkinter` loading and polling refresh
+- fixture-based regression harness for blank, shapes, text, image, undo/edit/delete, and batch cases
+- automated packaging/build validation plus isolated `uv tool install` validation
 - structured `--json` output and `--json` error output for all mutation commands (`mural watch` is display-only and does not use `--json`)
 
 Implementation notes:
 
-- text rendering uses Pillow's default font; the bundled-font requirement (SPEC §3.5) is deferred to milestone 8
+- text rendering uses a bundled Noto Sans font shipped in `src/mural/assets/`
 - image rendering and export now validate session-local assets; image source replacement remains out of scope
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 
-Next milestone: **8 — Hardening and regression harness**.
+Next milestone: **None — roadmap complete.**

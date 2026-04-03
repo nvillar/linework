@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib import resources
 from pathlib import Path
 from typing import cast
 
@@ -9,6 +10,8 @@ from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 from mural.core.objects import resolve_asset_path
 from mural.storage.models import Canvas, SceneSnapshot
+
+_DEFAULT_FONT_RESOURCE = resources.files("mural.assets").joinpath("NotoSans-Regular.ttf")
 
 
 def render_blank_canvas(canvas: Canvas, output_path: Path) -> None:
@@ -89,7 +92,7 @@ def render_object(
         return
 
     if object_type == "text":
-        font = ImageFont.load_default(size=number_or_default(object_data, "size", 16.0))
+        font = load_default_text_font(number_or_default(object_data, "size", 16.0))
         draw.text(
             (number_value(object_data, "x"), number_value(object_data, "y")),
             string_value(object_data, "text"),
@@ -121,6 +124,13 @@ def render_object(
         return
 
     raise ValueError(f"unsupported object type: {object_type}")
+
+
+def load_default_text_font(size: float) -> ImageFont.FreeTypeFont:
+    """Load the package-bundled default text font."""
+    normalized_size = max(1, int(round(size)))
+    with resources.as_file(_DEFAULT_FONT_RESOURCE) as font_path:
+        return ImageFont.truetype(str(font_path), size=normalized_size)
 
 
 def bounds_tuple(object_data: dict[str, object]) -> tuple[float, float, float, float]:

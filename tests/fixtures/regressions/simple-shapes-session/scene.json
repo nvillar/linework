@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "session_id": "simple-shapes-session",
+  "canvas": {
+    "width": 160,
+    "height": 120,
+    "background": "#FFFFFF"
+  },
+  "objects": [
+    {
+      "id": "obj_000001",
+      "type": "rect",
+      "visible": true,
+      "x": 12.0,
+      "y": 14.0,
+      "width": 60.0,
+      "height": 34.0,
+      "stroke": "#AA6600",
+      "stroke_width": 2.0,
+      "fill": "#FFD166"
+    },
+    {
+      "id": "obj_000002",
+      "type": "line",
+      "visible": true,
+      "x1": 0.0,
+      "y1": 119.0,
+      "x2": 159.0,
+      "y2": 0.0,
+      "stroke": "#073B4C",
+      "stroke_width": 3.0
+    },
+    {
+      "id": "obj_000003",
+      "type": "ellipse",
+      "visible": true,
+      "x": 90.0,
+      "y": 18.0,
+      "width": 42.0,
+      "height": 34.0,
+      "stroke": "#118AB2",
+      "stroke_width": 2.0,
+      "fill": "#06D6A0"
+    },
+    {
+      "id": "obj_000004",
+      "type": "polyline",
+      "visible": true,
+      "points": [
+        [
+          14.0,
+          90.0
+        ],
+        [
+          40.0,
+          70.0
+        ],
+        [
+          68.0,
+          94.0
+        ],
+        [
+          110.0,
+          76.0
+        ],
+        [
+          144.0,
+          102.0
+        ]
+      ],
+      "stroke": "#EF476F",
+      "stroke_width": 4.0
+    }
+  ]
+}

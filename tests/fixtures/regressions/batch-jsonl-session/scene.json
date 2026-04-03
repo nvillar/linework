@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "session_id": "batch-jsonl-session",
+  "canvas": {
+    "width": 140,
+    "height": 100,
+    "background": "#FFFFFF"
+  },
+  "objects": [
+    {
+      "id": "obj_000001",
+      "type": "rect",
+      "visible": true,
+      "x": 10.0,
+      "y": 10.0,
+      "width": 40.0,
+      "height": 30.0,
+      "stroke": "#000000",
+      "stroke_width": 2.0,
+      "fill": "#88CCFF"
+    },
+    {
+      "id": "obj_000002",
+      "type": "text",
+      "visible": true,
+      "x": 16.0,
+      "y": 18.0,
+      "text": "API",
+      "size": 16.0,
+      "fill": "#222222"
+    },
+    {
+      "id": "obj_000003",
+      "type": "line",
+      "visible": true,
+      "x1": 52.0,
+      "y1": 25.0,
+      "x2": 120.0,
+      "y2": 25.0,
+      "stroke": "#333333",
+      "stroke_width": 2.0
+    },
+    {
+      "id": "obj_000004",
+      "type": "ellipse",
+      "visible": true,
+      "label": "node",
+      "x": 104.0,
+      "y": 10.0,
+      "width": 24.0,
+      "height": 24.0,
+      "stroke": "#000000",
+      "stroke_width": 2.0,
+      "fill": "#99DD99"
+    }
+  ]
+}

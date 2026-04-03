@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "session_id": "image-placement-session",
+  "name": "image-placement-session",
+  "created_at": "2026-04-03T22:38:43Z",
+  "updated_at": "2026-04-03T22:38:43Z",
+  "canvas": {
+    "width": 120,
+    "height": 100,
+    "background": "#FFFFFF"
+  },
+  "paths": {
+    "scene": "scene.json",
+    "commands": "commands.jsonl",
+    "latest_render": "render/latest.png",
+    "assets_dir": "assets"
+  }
+}

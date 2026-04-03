@@ -1,0 +1,4 @@
+{"schema_version": 1, "op_id": "op_000001", "timestamp": "2026-04-03T22:38:43Z", "op": "draw.rect", "payload": {"x": 10, "y": 10, "width": 40, "height": 30, "fill": "#88CCFF", "id": "obj_000001"}}
+{"schema_version": 1, "op_id": "op_000002", "timestamp": "2026-04-03T22:38:43Z", "op": "draw.text", "payload": {"x": 16, "y": 18, "text": "API", "size": 16, "fill": "#222222", "id": "obj_000002"}}
+{"schema_version": 1, "op_id": "op_000003", "timestamp": "2026-04-03T22:38:43Z", "op": "draw.line", "payload": {"x1": 52, "y1": 25, "x2": 120, "y2": 25, "stroke": "#333333", "stroke_width": 2, "id": "obj_000003"}}
+{"schema_version": 1, "op_id": "op_000004", "timestamp": "2026-04-03T22:38:43Z", "op": "draw.ellipse", "payload": {"x": 104, "y": 10, "width": 24, "height": 24, "fill": "#99DD99", "label": "node", "id": "obj_000004"}}
