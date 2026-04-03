@@ -119,7 +119,7 @@ Internal engine capabilities:
 - PNG rendering for all supported primitives
 - session-local asset import/copy for image convenience commands
 - read-only watcher window with lazy `tkinter` loading and polling refresh
-- structured `--json` output and `--json` error output for all commands
+- structured `--json` output and `--json` error output for all mutation commands (`mural watch` is display-only and does not use `--json`)
 
 Implementation notes:
 

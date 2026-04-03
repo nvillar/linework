@@ -320,6 +320,11 @@ def _build_image(
     with Image.open(asset_full_path) as image:
         natural_width, natural_height = image.size
 
+    if natural_width <= 0 or natural_height <= 0:
+        raise CommandValidationError(
+            f"image has invalid dimensions: {natural_width}x{natural_height}"
+        )
+
     normalized_width: float
     normalized_height: float
 
