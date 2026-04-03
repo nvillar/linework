@@ -4,11 +4,13 @@ BOOTSTRAP_TEXT = """\
 mural: agent-first CLI sketch tool
 
 Mural is a non-interactive, session-based drawing tool. Every drawing lives in
-an explicit session directory. All mutations go through JSONL batch operations.
+an explicit session directory. JSONL batch operations are the primary interface,
+with convenience commands for common single-object edits.
 
 Quick start:
   mural new --json                          # create a session
   mural run --session PATH --json < ops.jsonl  # draw via JSONL batch
+  mural draw rect --session PATH --x 50 --y 50 --width 200 --height 100 --json
   mural inspect --session PATH --json       # read the scene back
   mural export --session PATH --out out.png # get the PNG
 
@@ -29,13 +31,12 @@ Commands:
   mural run          Apply JSONL operations (primary interface)
   mural inspect      Read current scene state
   mural export       Export PNG to a path
-  mural watch        Open a live preview window
-  mural draw         Draw a single object (convenience)
-  mural edit         Edit a single object (convenience)
+  mural draw         Draw a single object (line, rect, ellipse, polyline, text)
+  mural edit         Edit a single object (line, rect, ellipse, polyline, text)
   mural delete       Delete a single object (convenience)
   mural undo         Undo last operation (convenience)
 
-All commands accept --json for structured output and --session PATH.
+Mutation commands accept --json and --session PATH.
 
 Help:
   mural --help

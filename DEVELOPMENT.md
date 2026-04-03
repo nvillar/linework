@@ -45,7 +45,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - Pillow renderer
 - latest PNG generation
 
-#### Milestone 4: Core agent loop
+#### Milestone 4: Core agent loop (complete)
 
 - `mural run` (JSONL batch from stdin and `--file`)
 - `mural run --json` with per-operation results
@@ -55,18 +55,19 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - bootstrap text rewrite: teach JSONL workflow as the primary interface
 - tests for all new commands
 
-#### Milestone 5: Convenience CLI
+#### Milestone 5: Convenience CLI (complete)
 
-- `mural draw line|rect|ellipse|polyline|text|image`
-- `mural edit line|rect|ellipse|polyline|text|image`
+- `mural draw line|rect|ellipse|polyline|text`
+- `mural edit line|rect|ellipse|polyline|text`
 - `mural delete --id`
 - `mural undo`
-- `--json` output for all convenience commands
-- `mural new --watch`
+- `--json` output for all convenience commands (single-operation `run` shape)
 - tests for all convenience commands
 
 #### Milestone 6: Image assets and portability
 
+- `mural draw image --source PATH`
+- `mural edit image`
 - `--source PATH` import (copy into session `assets/`)
 - asset path normalization
 - original source metadata
@@ -75,6 +76,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 #### Milestone 7: Watcher
 
 - `mural watch`
+- `mural new --watch`
 - polling loop
 - image refresh
 - session ID title
@@ -92,7 +94,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 
 ### Current implementation status
 
-Completed milestones: 1, 2, 3, 4.
+Completed milestones: 1, 2, 3, 4, 5.
 
 Current user-facing command surface:
 
@@ -102,6 +104,10 @@ Current user-facing command surface:
 - `mural run` (JSONL batch — primary agent interface)
 - `mural inspect`
 - `mural export`
+- `mural draw line|rect|ellipse|polyline|text`
+- `mural edit line|rect|ellipse|polyline|text`
+- `mural delete`
+- `mural undo`
 
 Internal engine capabilities:
 
@@ -114,7 +120,7 @@ Internal engine capabilities:
 Implementation notes:
 
 - text rendering uses Pillow's default font; the bundled-font requirement (SPEC §3.5) is deferred to milestone 8
-- image rendering works for session-local assets; CLI asset import/copy is deferred to milestone 6
-- convenience CLI commands (`draw`, `edit`, `delete`, `undo`) are deferred to milestone 5
+- image rendering works for session-local assets; convenience image CLI and asset import/copy are deferred to milestone 6
+- watcher behavior and `mural new --watch` are deferred to milestone 7
 
-Next milestone: **5 — Convenience CLI**.
+Next milestone: **6 — Image assets and portability**.
