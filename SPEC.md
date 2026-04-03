@@ -6,6 +6,8 @@ This document is the source of truth for the `mural` project until code exists a
 
 `README.md` must not be written until the code exists and the examples in the README can be executed against the repository as implemented.
 
+Development workflow requirements live in `DEVELOPMENT.md`.
+
 ## 1. Purpose
 
 `mural` is an agent-first CLI tool for quickly drawing and sketching visual ideas.
@@ -58,8 +60,10 @@ uv run python -m mural
 The package must be installable as a tool from GitHub using `uv tool install`, in the form:
 
 ```bash
-uv tool install git+https://github.com/nvillar/mural
+uv tool install git+https://github.com/nvillar/mural.git
 ```
+
+The expected installability target is a public GitHub repository. Until the repository is public, private-repo authentication may be required for testing this install path.
 
 That implies:
 
@@ -98,6 +102,7 @@ The bundled font becomes part of the rendering contract for the MVP.
 
 - This `SPEC.md` file is the authoritative definition of the project until replaced or amended by explicit subsequent decisions.
 - When implementation questions arise, code should follow this spec unless the spec is intentionally updated first.
+- `DEVELOPMENT.md` defines the required implementation workflow and milestone closeout process.
 
 ### 4.2 GitHub Issues and Milestones
 
@@ -307,6 +312,12 @@ where `slug` comes from `--name` when provided, or a generated default slug when
 
 If `--name` is omitted, the default slug is `session`.
 
+When `--name` is provided, the slug used in the session directory name must be normalized to a filesystem-safe lowercase hyphenated form.
+
+When `mural new` is given an explicit `--session PATH` and `--name` is omitted, the stored session `name` must default to the basename of the session directory.
+
+When `mural new` auto-creates a session path and `--name` is omitted, the stored session `name` must default to `session`.
+
 The basename of the session directory is the human-facing short session ID. The canonical handle remains the full path.
 
 ### 7.4 Internal home directory
@@ -320,6 +331,8 @@ The basename of the session directory is the human-facing short session ID. The 
 - temporary runtime artifacts
 
 Machine-local runtime state must not be stored inside a portable session directory.
+
+The default machine-local home root is `~/.mural/`. Implementations may support overriding that home root via environment configuration for testing or constrained environments, as long as the default behavior remains `~/.mural/`.
 
 ### 7.5 Portability
 

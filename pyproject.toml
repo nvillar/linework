@@ -12,7 +12,9 @@ license = { text = "Proprietary" }
 authors = [
   { name = "Nicolas Villar" },
 ]
-dependencies = []
+dependencies = [
+    "pillow>=12.2.0",
+]
 
 [project.scripts]
 mural = "mural.cli:main"
