@@ -187,19 +187,6 @@ def _add_stroke_width_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--stroke-width", type=float, help="Stroke width in pixels.")
 
 
-def _add_session_json_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add the shared session and JSON flags to a parser."""
-    _add_session_argument(parser)
-    _add_json_argument(parser)
-
-
-def _add_draw_common_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add shared optional fields for draw commands."""
-    _add_label_argument(parser)
-    _add_visible_argument(parser)
-    _add_json_argument(parser)
-
-
 def _add_edit_common_arguments(parser: argparse.ArgumentParser) -> None:
     """Add shared optional fields for edit commands."""
     _add_session_argument(parser)
