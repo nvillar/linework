@@ -11,6 +11,7 @@ Quick start:
   mural new --json                          # create a session
   mural run --session PATH --json < ops.jsonl  # draw via JSONL batch
   mural draw rect --session PATH --x 50 --y 50 --width 200 --height 100 --json
+  mural draw image --session PATH --source ./diagram.png --x 40 --y 30 --json
   mural inspect --session PATH --json       # read the scene back
   mural export --session PATH --out out.png # get the PNG
 
@@ -31,8 +32,8 @@ Commands:
   mural run          Apply JSONL operations (primary interface)
   mural inspect      Read current scene state
   mural export       Export PNG to a path
-  mural draw         Draw a single object (line, rect, ellipse, polyline, text)
-  mural edit         Edit a single object (line, rect, ellipse, polyline, text)
+  mural draw         Draw a single object (line, rect, ellipse, polyline, text, image)
+  mural edit         Edit a single object (line, rect, ellipse, polyline, text, image)
   mural delete       Delete a single object (convenience)
   mural undo         Undo last operation (convenience)
 

@@ -307,9 +307,10 @@ def _build_image(
 ) -> ObjectDict:
     object_data = normalize_common_fields(payload, object_id=object_id, object_type="image")
     asset_path = require_string(payload.get("asset_path"), field="asset_path")
-    asset_full_path = resolve_asset_path(session_path=session_path, asset_path=asset_path)
+    normalized_asset_path = normalize_asset_path(session_path=session_path, asset_path=asset_path)
+    asset_full_path = session_path.resolve() / Path(normalized_asset_path)
     if not asset_full_path.is_file():
-        raise CommandValidationError(f"image asset does not exist: {asset_path}")
+        raise CommandValidationError(f"image asset does not exist: {normalized_asset_path}")
 
     x = require_number(payload.get("x"), field="x")
     y = require_number(payload.get("y"), field="y")
@@ -341,7 +342,7 @@ def _build_image(
             "y": y,
             "width": normalized_width,
             "height": normalized_height,
-            "asset_path": asset_path,
+            "asset_path": normalized_asset_path,
         }
     )
     source_path = require_optional_string(payload.get("source_path"), field="source_path")
@@ -350,23 +351,29 @@ def _build_image(
     return object_data
 
 
-def resolve_asset_path(*, session_path: Path, asset_path: str) -> Path:
-    """Resolve a session-local image asset path.
-
-    Only relative paths that resolve inside the session directory are accepted.
-    """
+def normalize_asset_path(*, session_path: Path, asset_path: str) -> str:
+    """Normalize a session-local asset path to a canonical relative POSIX string."""
     candidate = Path(asset_path)
     if candidate.is_absolute():
         raise CommandValidationError(
             f"asset_path must be relative, got absolute path: {asset_path}"
         )
 
-    resolved = (session_path / candidate).resolve()
     session_resolved = session_path.resolve()
+    resolved = (session_path / candidate).resolve()
     try:
-        resolved.relative_to(session_resolved)
+        relative = resolved.relative_to(session_resolved)
     except ValueError:
         raise CommandValidationError(
             f"asset_path must resolve inside the session directory: {asset_path}"
         )
-    return resolved
+    return relative.as_posix()
+
+
+def resolve_asset_path(*, session_path: Path, asset_path: str) -> Path:
+    """Resolve a session-local image asset path.
+
+    Only relative paths that resolve inside the session directory are accepted.
+    """
+    normalized_asset_path = normalize_asset_path(session_path=session_path, asset_path=asset_path)
+    return session_path.resolve() / Path(normalized_asset_path)

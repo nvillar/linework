@@ -15,6 +15,7 @@ from mural.storage.models import MutationResult
 from mural.storage.session import (
     SessionError,
     apply_batch,
+    apply_imported_image,
     apply_mutation,
     create_session,
     export_session,
@@ -73,6 +74,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_draw_rect_like_parser(draw_subparsers, name="ellipse")
     _add_draw_polyline_parser(draw_subparsers)
     _add_draw_text_parser(draw_subparsers)
+    _add_draw_image_parser(draw_subparsers)
 
     # --- edit ---
     edit_parser = subparsers.add_parser("edit", help="Modify a single object (convenience).")
@@ -82,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
     _add_edit_rect_like_parser(edit_subparsers, name="ellipse")
     _add_edit_polyline_parser(edit_subparsers)
     _add_edit_text_parser(edit_subparsers)
+    _add_edit_image_parser(edit_subparsers)
 
     # --- delete ---
     delete_parser = subparsers.add_parser("delete", help="Delete a single object.")
@@ -308,6 +311,20 @@ def _add_draw_text_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     _add_json_argument(parser)
 
 
+def _add_draw_image_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Add the ``mural draw image`` parser."""
+    parser = subparsers.add_parser("image", help="Draw an imported image.")
+    _add_session_argument(parser)
+    parser.add_argument("--source", required=True, help="Path to the source image file.")
+    parser.add_argument("--x", type=float, required=True, help="Top-left x coordinate.")
+    parser.add_argument("--y", type=float, required=True, help="Top-left y coordinate.")
+    parser.add_argument("--width", type=float, help="Width in pixels.")
+    parser.add_argument("--height", type=float, help="Height in pixels.")
+    _add_label_argument(parser)
+    _add_visible_argument(parser)
+    _add_json_argument(parser)
+
+
 def _add_edit_line_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Add the ``mural edit line`` parser."""
     parser = subparsers.add_parser("line", help="Edit a line.")
@@ -347,6 +364,13 @@ def _add_edit_text_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     _add_text_geometry(parser, required=False)
     parser.add_argument("--size", type=float, help="Text size in pixels.")
     _add_fill_argument(parser)
+
+
+def _add_edit_image_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Add the ``mural edit image`` parser."""
+    parser = subparsers.add_parser("image", help="Edit an image object.")
+    _add_edit_common_arguments(parser)
+    _add_rect_like_geometry(parser, required=False)
 
 
 def _include_optional_values(
@@ -395,6 +419,11 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
     if draw_type == "text":
         payload = {"x": args.x, "y": args.y, "text": args.text}
         _include_optional_values(payload, args, "size", "label", "visible", "fill")
+        return payload
+
+    if draw_type == "image":
+        payload = {"x": args.x, "y": args.y}
+        _include_optional_values(payload, args, "width", "height", "label", "visible")
         return payload
 
     raise ValueError(f"unsupported draw type: {draw_type}")
@@ -455,6 +484,17 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             "visible",
             "fill",
         )
+    elif edit_type == "image":
+        _include_optional_values(
+            payload,
+            args,
+            "x",
+            "y",
+            "width",
+            "height",
+            "label",
+            "visible",
+        )
     else:
         raise ValueError(f"unsupported edit type: {edit_type}")
 
@@ -494,7 +534,16 @@ def _apply_single_operation(
         result = apply_mutation(session, op=op, payload=payload)
     except (OSError, SessionError, SessionLockedError, SceneEngineError) as exc:
         return _error(str(exc), use_json=use_json)
+    return _emit_single_operation_result(result=result, use_json=use_json, summary=summary)
 
+
+def _emit_single_operation_result(
+    *,
+    result: MutationResult,
+    use_json: bool,
+    summary: Callable[[MutationResult], str],
+) -> int:
+    """Emit output for a single-operation result."""
     if use_json:
         print(json.dumps(_single_operation_payload(result), indent=2))
         return 0
@@ -695,6 +744,18 @@ def cmd_draw(args: argparse.Namespace) -> int:
         payload = _build_draw_payload(args)
     except ValueError as exc:
         return _error(str(exc), use_json=args.json)
+
+    if args.draw_type == "image":
+        try:
+            result = apply_imported_image(args.session, source=args.source, payload=payload)
+        except (OSError, SessionError, SessionLockedError, SceneEngineError) as exc:
+            return _error(str(exc), use_json=args.json)
+        return _emit_single_operation_result(
+            result=result,
+            use_json=args.json,
+            summary=_draw_summary,
+        )
+
     return _apply_single_operation(
         session=args.session,
         op=f"draw.{args.draw_type}",

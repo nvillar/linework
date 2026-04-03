@@ -64,7 +64,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - `--json` output for all convenience commands (single-operation `run` shape)
 - tests for all convenience commands
 
-#### Milestone 6: Image assets and portability
+#### Milestone 6: Image assets and portability (complete)
 
 - `mural draw image --source PATH`
 - `mural edit image`
@@ -94,7 +94,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 
 ### Current implementation status
 
-Completed milestones: 1, 2, 3, 4, 5.
+Completed milestones: 1, 2, 3, 4, 5, 6.
 
 Current user-facing command surface:
 
@@ -104,8 +104,8 @@ Current user-facing command surface:
 - `mural run` (JSONL batch — primary agent interface)
 - `mural inspect`
 - `mural export`
-- `mural draw line|rect|ellipse|polyline|text`
-- `mural edit line|rect|ellipse|polyline|text`
+- `mural draw line|rect|ellipse|polyline|text|image`
+- `mural edit line|rect|ellipse|polyline|text|image`
 - `mural delete`
 - `mural undo`
 
@@ -115,12 +115,13 @@ Internal engine capabilities:
 - JSONL batch execution with single-render-at-end semantics
 - scene replay from command history
 - PNG rendering for all supported primitives
+- session-local asset import/copy for image convenience commands
 - structured `--json` output and `--json` error output for all commands
 
 Implementation notes:
 
 - text rendering uses Pillow's default font; the bundled-font requirement (SPEC §3.5) is deferred to milestone 8
-- image rendering works for session-local assets; convenience image CLI and asset import/copy are deferred to milestone 6
+- image rendering and export now validate session-local assets; image source replacement remains out of scope
 - watcher behavior and `mural new --watch` are deferred to milestone 7
 
-Next milestone: **6 — Image assets and portability**.
+Next milestone: **7 — Watcher**.

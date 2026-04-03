@@ -8,9 +8,13 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
+from PIL import Image, UnidentifiedImageError
+
 from mural.config import sessions_root
 from mural.constants import HEX_COLOR
 from mural.core.commands import normalize_command
+from mural.core.errors import SceneEngineError
+from mural.core.objects import resolve_asset_path
 from mural.core.scene import derive_scene
 from mural.render.png import render_blank_canvas, render_scene
 from mural.storage.ids import build_session_id, iso_timestamp, normalize_slug, utc_now
@@ -145,38 +149,170 @@ def apply_mutation(
             existing_commands=commands,
             session_path=resolved_session_path,
         )
-        updated_commands = [*commands, normalized_command]
-        updated_scene = derive_scene(
-            canvas=metadata.canvas,
-            commands=updated_commands,
+        return _commit_mutation(
             session_path=resolved_session_path,
-            session_id=metadata.session_id,
+            metadata=metadata,
+            commands=commands,
+            normalized_command=normalized_command,
         )
-        updated_metadata = SessionMetadata(
-            schema_version=metadata.schema_version,
-            session_id=metadata.session_id,
-            name=metadata.name,
-            created_at=metadata.created_at,
-            updated_at=normalized_command.timestamp,
-            canvas=metadata.canvas,
-            paths=metadata.paths,
-        )
-        write_mutated_session(
+
+
+def apply_imported_image(
+    session_path: str | Path,
+    *,
+    source: str,
+    payload: dict[str, object] | None = None,
+) -> MutationResult:
+    """Import an external image into the session and create a draw.image command."""
+    resolved_session_path = Path(session_path).expanduser().resolve()
+
+    with writer_lock(resolved_session_path):
+        metadata = read_session_metadata(resolved_session_path)
+        commands = read_commands(resolved_session_path)
+        asset_path, source_path, created_asset_copy = _import_image_asset(
             session_path=resolved_session_path,
-            metadata=updated_metadata,
-            scene=updated_scene,
-            commands=updated_commands,
+            assets_dir=metadata.paths.assets_dir,
+            source=source,
         )
+        command_payload = dict(payload or {})
+        command_payload["asset_path"] = asset_path
+        command_payload["source_path"] = source_path
+        completed = False
+        try:
+            normalized_command = normalize_command(
+                op="draw.image",
+                payload=command_payload,
+                existing_commands=commands,
+                session_path=resolved_session_path,
+            )
+            result = _commit_mutation(
+                session_path=resolved_session_path,
+                metadata=metadata,
+                commands=commands,
+                normalized_command=normalized_command,
+            )
+            completed = True
+            return result
+        finally:
+            if not completed and created_asset_copy is not None and created_asset_copy.exists():
+                created_asset_copy.unlink()
+
+
+def _commit_mutation(
+    *,
+    session_path: Path,
+    metadata: SessionMetadata,
+    commands: list[CommandRecord],
+    normalized_command: CommandRecord,
+) -> MutationResult:
+    """Commit a normalized command to session storage and return its result."""
+    updated_commands = [*commands, normalized_command]
+    updated_scene = derive_scene(
+        canvas=metadata.canvas,
+        commands=updated_commands,
+        session_path=session_path,
+        session_id=metadata.session_id,
+    )
+    updated_metadata = SessionMetadata(
+        schema_version=metadata.schema_version,
+        session_id=metadata.session_id,
+        name=metadata.name,
+        created_at=metadata.created_at,
+        updated_at=normalized_command.timestamp,
+        canvas=metadata.canvas,
+        paths=metadata.paths,
+    )
+    write_mutated_session(
+        session_path=session_path,
+        metadata=updated_metadata,
+        scene=updated_scene,
+        commands=updated_commands,
+    )
 
     object_id = normalized_command.payload.get("id")
     return MutationResult(
         op_id=normalized_command.op_id,
         op=normalized_command.op,
         object_id=object_id if isinstance(object_id, str) else None,
-        session_path=str(resolved_session_path),
+        session_path=str(session_path),
         scene_object_count=len(updated_scene.objects),
-        latest_render=str(resolved_session_path / updated_metadata.paths.latest_render),
+        latest_render=str(session_path / updated_metadata.paths.latest_render),
     )
+
+
+def _import_image_asset(
+    *,
+    session_path: Path,
+    assets_dir: str,
+    source: str,
+) -> tuple[str, str, Path | None]:
+    """Copy an external image file into the session assets directory."""
+    source_path = Path(source).expanduser().resolve()
+    if not source_path.is_file():
+        raise SessionValidationError(f"image source does not exist: {source_path}")
+    _validate_image_file(source_path, error_prefix="invalid image source")
+
+    assets_root = session_path / assets_dir
+    assets_root.mkdir(parents=True, exist_ok=True)
+    destination = _resolve_import_destination(assets_root=assets_root, source_path=source_path)
+
+    created_asset_copy: Path | None = None
+    if not destination.exists() or destination.resolve() != source_path:
+        shutil.copy2(source_path, destination)
+        created_asset_copy = destination
+
+    asset_path = destination.relative_to(session_path.resolve()).as_posix()
+    return asset_path, str(source_path), created_asset_copy
+
+
+def _resolve_import_destination(*, assets_root: Path, source_path: Path) -> Path:
+    """Choose a normalized, collision-safe destination path under assets/."""
+    stem = normalize_slug(source_path.stem or "image")
+    if stem == "session" and source_path.stem.strip().lower() != "session":
+        stem = "image"
+    suffix = source_path.suffix.lower()
+
+    candidate = assets_root / f"{stem}{suffix}"
+    if candidate.exists() and candidate.resolve() == source_path:
+        return candidate
+
+    index = 2
+    while candidate.exists():
+        candidate = assets_root / f"{stem}-{index}{suffix}"
+        if candidate.exists() and candidate.resolve() == source_path:
+            return candidate
+        index += 1
+    return candidate
+
+
+def _validate_image_file(path: Path, *, error_prefix: str) -> None:
+    """Verify that a path contains a readable image."""
+    try:
+        with Image.open(path) as image:
+            image.verify()
+    except (OSError, UnidentifiedImageError) as exc:
+        raise SessionValidationError(f"{error_prefix}: {path}") from exc
+
+
+def _validate_exportable_assets(scene: SceneSnapshot, *, session_path: Path) -> None:
+    """Ensure all scene image assets exist and are readable before export."""
+    for object_data in scene.objects:
+        if object_data.get("type") != "image":
+            continue
+
+        asset_path = object_data.get("asset_path")
+        if not isinstance(asset_path, str):
+            raise SessionValidationError("image asset_path must be a string")
+
+        try:
+            asset_full_path = resolve_asset_path(session_path=session_path, asset_path=asset_path)
+        except SceneEngineError as exc:
+            raise SessionValidationError(str(exc)) from exc
+
+        if not asset_full_path.is_file():
+            raise SessionValidationError(f"image asset missing: {asset_path}")
+
+        _validate_image_file(asset_full_path, error_prefix="invalid image asset")
 
 
 def initialize_session_directory(
@@ -337,13 +473,25 @@ def inspect_session(session_path: str | Path) -> InspectResult:
 def export_session(session_path: str | Path, *, out: str) -> str:
     """Export the current scene render to an output path."""
     resolved = Path(session_path).expanduser().resolve()
-    metadata = read_session_metadata(resolved)
-    source = resolved / metadata.paths.latest_render
-    if not source.is_file():
-        raise SessionNotFoundError(f"latest render not found: {source}")
+    scene = read_scene_snapshot(resolved)
+    _validate_exportable_assets(scene, session_path=resolved)
+
     destination = Path(out).expanduser().resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, destination)
+    with tempfile.NamedTemporaryFile(
+        prefix=f".{destination.name}.tmp-",
+        suffix=destination.suffix or ".png",
+        dir=destination.parent,
+        delete=False,
+    ) as handle:
+        temp_output = Path(handle.name)
+
+    try:
+        render_scene(scene, temp_output, session_path=resolved)
+        temp_output.replace(destination)
+    finally:
+        if temp_output.exists():
+            temp_output.unlink()
     return str(destination)
 
 
