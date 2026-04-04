@@ -22,6 +22,12 @@ window** to show the drawing come together in real time.
 uv tool install git+https://github.com/nvillar/linework.git
 ```
 
+In Windows, if you run into an 'incompatible hardlinks' error, try this instead:
+```bash
+uv tool install --link-mode copy git+https://github.com/nvillar/linework.git
+```
+
+
 ## Quick start
 
 Give your agent a prompt like this:
