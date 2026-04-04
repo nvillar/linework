@@ -483,6 +483,7 @@ Behavior:
 - Otherwise create it under `~/.linework/sessions/`.
 - Print the session path and short session ID.
 - Render the initial blank PNG immediately.
+- By default, watcher launch is best-effort; session creation still succeeds if the watcher cannot start.
 
 Required semantics:
 

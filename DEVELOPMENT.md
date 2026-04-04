@@ -77,7 +77,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 #### Milestone 7: Watcher (complete)
 
 - `linework watch`
-- `linework new --watch`
+- watcher launch from `linework new`
 - polling loop
 - image refresh
 - session ID title
@@ -100,7 +100,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - `polygon` primitive for filled closed shapes
 - label-based selection for `delete` and `edit.*` when IDs are omitted
 - batch-aware undo (`linework run` undoes as one action)
-- normalized `--json` error envelope in `new --watch` failure path
+- `linework new` watcher startup behavior refinements
 - refactored `apply_batch()` to remove duplicated scene-derivation branches
 - expanded JSON error, batch edge case, and CLI validation coverage
 - refreshed bootstrap text, subcommand help, and polygon regression fixtures
