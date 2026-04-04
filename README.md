@@ -1,15 +1,15 @@
 # `linework`
 
-`linework` is a simple sketching tool for agents, allowing them to draw shapes, 
-place text, build diagrams, and export PNGs from the command line. 
+`linework` is a simple sketching tool for agents that allows them to draw 
+shapes, place text, build diagrams, and export PNGs from the command line. 
 
-`linework` keeps the underlying objects, allowing an agent to
+`linework` keeps the underlying drawing objects, allowing an agent to
 tweak things (*make the red box wider, change the background, relabel
 that arrow*), editing the shapes in place instead of regenerating the image 
 from scratch.
 
-The agent can work in the background, or — by default — open a read-only **watcher
-window** to show the drawing come together in real time.
+The agent can a read-only **watcher window** to show the drawing come together in 
+real time, or work in a background process with no graphical interface.
 
 ![screenshot of an agent using linework to make a chart and a picture](screenshot.png)
 
@@ -20,13 +20,14 @@ window** to show the drawing come together in real time.
 
 ## Install or update
 
-```bash
-uv tool install git+https://github.com/nvillar/linework.git
-```
-
-In Windows, if you run into an 'incompatible hardlinks' error, try this instead:
+On Windows:
 ```bash
 uv tool install --link-mode copy git+https://github.com/nvillar/linework.git
+```
+
+On macOS:
+```bash
+uv tool install git+https://github.com/nvillar/linework.git
 ```
 
 
@@ -34,13 +35,17 @@ uv tool install --link-mode copy git+https://github.com/nvillar/linework.git
 
 Give your agent a prompt like this:
 
-> Use the `linework` cli to draw a self-portrait. Open a watcher for me.
+```
+Use the `linework` cli to draw a self-portrait.
+```
 
 Or, if you want to be more explicit: 
 
-> You have access to the `linework` CLI for creating drawings and diagrams.
-> Run `linework` with no arguments to learn how it works. Start by creating a
-> session, then draw a self-portrait.
+```
+You have access to the `linework` CLI for creating drawings and diagrams.
+Run `linework` with no arguments to learn how it works. Start by creating a
+session, then draw a self-portrait.
+```
 
 The agent will read the built-in bootstrap guide, create a session, open the
 watcher window on your screen, and start drawing.
@@ -52,8 +57,10 @@ watcher window on your screen, and start drawing.
  agent can catch alignment, spacing, and readability issues that aren't obvious from 
  object coordinates alone and correct them with follow-up edits.
 
-> After drawing, view the latest render to check how it looks. If anything is off
-> — alignment, spacing, overlap — fix it.
+```
+ After drawing, view the latest render to check how it looks. If anything is off
+ — alignment, spacing, overlap — fix it.
+```
 
 ## Under the hood
 
@@ -62,7 +69,7 @@ Every drawing lives in a portable **session directory**. The primary interface i
 is doing behind the scenes:
 
 ```bash
-# Create a session (watcher window opens automatically)
+# Create a session. A watcher window opens automatically
 linework new --name demo
 
 # Draw via JSONL batch (in another terminal)
