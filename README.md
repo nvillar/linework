@@ -11,6 +11,8 @@ from scratch.
 The agent can work in the background, or can open a read-only **watcher
 window** to show the drawing come together in real time.
 
+![screenshot of an agent using linework to make a chart and a picture](screenshot.png)
+
 ## Prerequisites
 
 - **[uv](https://docs.astral.sh/uv/)** — Python package and project manager.
