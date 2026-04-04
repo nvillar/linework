@@ -39,6 +39,16 @@ Give your agent a prompt like this:
 The agent will read the built-in bootstrap guide, create a session, open the
 watcher window on your screen, and start drawing. 
 
+## Tip: Visual feedback
+
+ If your agent supports image understanding, a useful pattern is to have it view 
+ the rendered PNG to verify the result visually. By viewing it, the 
+ agent can catch alignment, spacing, and readability issues that aren't obvious from 
+ object coordinates alone and correct them with follow-up edits.
+
+> After drawing, view the latest render to check how it looks. If anything is off
+> — alignment, spacing, overlap — fix it.
+
 ## Under the hood
 
 Every drawing lives in a portable **session directory**. The primary interface is
