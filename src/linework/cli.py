@@ -1420,16 +1420,17 @@ def _launch_detached_watcher(
     resolved = Path(session).expanduser().resolve()
     read_session_metadata(resolved)
 
-    cmd = [
-        sys.executable,
-        "-m",
-        "linework",
-        "_watch-impl",
-        "--session",
-        str(session),
-        "--interval-ms",
-        str(interval_ms),
-    ]
+    # Re-invoke ourselves so the detached child works whether linework
+    # was installed via `uv tool install`, `uv run`, or `python -m linework`.
+    argv0 = sys.argv[0] if sys.argv else ""
+    if argv0.endswith("__main__.py") or not argv0:
+        # Invoked as `python -m linework` — use the same interpreter + module.
+        cmd = [sys.executable, "-m", "linework", "_watch-impl"]
+    else:
+        # Invoked via an entry point script (e.g. `uv tool install`).
+        # The script has its own shebang, so run it directly.
+        cmd = [argv0, "_watch-impl"]
+    cmd += ["--session", str(session), "--interval-ms", str(interval_ms)]
 
     if sys.platform == "win32":
         CREATE_NEW_PROCESS_GROUP = 0x00000200
@@ -1443,14 +1444,18 @@ def _launch_detached_watcher(
             creationflags=CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS,
         )
     else:
+        # Use file-based /dev/null rather than subprocess.DEVNULL.
+        # On macOS, subprocess.DEVNULL can interfere with tkinter's
+        # Tcl resource discovery when stdin is redirected.
+        devnull = open("/dev/null", "w")  # noqa: SIM115
         process = subprocess.Popen(
             cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=devnull,
+            stderr=devnull,
             close_fds=True,
             start_new_session=True,
         )
+        devnull.close()
     return process.pid
 
 
