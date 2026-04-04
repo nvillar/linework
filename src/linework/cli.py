@@ -46,6 +46,7 @@ class _HelpFormatter(
 
 _TOP_LEVEL_EPILOG = """\
 Golden path:
+  linework                                      # orientation and JSONL reference
   linework schema --json
   linework new --name idea-board --json
   linework run --session PATH --json < ops.jsonl
