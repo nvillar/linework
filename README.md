@@ -16,7 +16,7 @@ window** to show the drawing come together in real time.
 - **[uv](https://docs.astral.sh/uv/)** — Python package and project manager.
 - An **agent with terminal access** (e.g. Copilot, Claude, Codex, or VS Code).
 
-## Install
+## Install or update
 
 ```bash
 uv tool install git+https://github.com/nvillar/linework.git
