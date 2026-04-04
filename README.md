@@ -30,7 +30,7 @@ On macOS:
 ```bash
 uv tool install git+https://github.com/nvillar/linework.git
 ```
-
+Or point your agent to this page and ask it to install `linework`.
 
 ## Quick start
 
