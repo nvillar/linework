@@ -231,8 +231,8 @@ def test_new_rejects_invalid_background(tmp_path: Path) -> None:
     assert "background must be" in result.stderr
 
 
-def test_watch_launches_watcher_with_requested_interval(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_watch_launches_detached_watcher_with_requested_interval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     from linework import cli
 
@@ -247,24 +247,27 @@ def test_watch_launches_watcher_with_requested_interval(
 
     captured: dict[str, object] = {}
 
-    def fake_watch_session(session: str, *, interval_ms: int) -> None:
+    def fake_launch(session: str, *, interval_ms: int) -> int:
         captured["session"] = session
         captured["interval_ms"] = interval_ms
+        return 99999
 
-    monkeypatch.setattr(cli, "watch_session", fake_watch_session)
+    monkeypatch.setattr(cli, "_launch_detached_watcher", fake_launch)
 
     exit_code = cli.main(
         ["watch", "--session", str(session_path), "--interval-ms", str(DEFAULT_INTERVAL_MS + 50)]
     )
+    out = capsys.readouterr()
 
     assert exit_code == 0
     assert captured == {
         "session": str(session_path),
         "interval_ms": DEFAULT_INTERVAL_MS + 50,
     }
+    assert "pid 99999" in out.out
 
 
-def test_new_watch_creates_session_before_launching_watcher(
+def test_new_watch_creates_session_and_launches_detached_watcher(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     from linework import cli
@@ -272,19 +275,15 @@ def test_new_watch_creates_session_before_launching_watcher(
     session_path = tmp_path / "watched-session"
     seen: dict[str, object] = {}
 
-    class FakeWatcher:
-        def run(self) -> None:
-            seen["ran"] = True
-
-    def fake_create_session_watcher(session: str, *, interval_ms: int) -> FakeWatcher:
+    def fake_launch(session: str, *, interval_ms: int) -> int:
         watched_path = Path(session)
         seen["session"] = watched_path
         seen["interval_ms"] = interval_ms
         seen["session_exists"] = watched_path.is_dir()
         seen["latest_render_exists"] = (watched_path / "render" / "latest.png").is_file()
-        return FakeWatcher()
+        return 42000
 
-    monkeypatch.setattr(cli, "create_session_watcher", fake_create_session_watcher)
+    monkeypatch.setattr(cli, "_launch_detached_watcher", fake_launch)
 
     exit_code = cli.main(["new", "--session", str(session_path), "--watch"])
     captured = capsys.readouterr()
@@ -295,9 +294,9 @@ def test_new_watch_creates_session_before_launching_watcher(
         "interval_ms": DEFAULT_INTERVAL_MS,
         "session_exists": True,
         "latest_render_exists": True,
-        "ran": True,
     }
     assert f"Session path: {session_path}" in captured.out
+    assert "pid 42000" in captured.out
     assert captured.err == ""
 
 
@@ -308,10 +307,10 @@ def test_new_watch_json_reports_session_when_watcher_fails(
 
     session_path = tmp_path / "watched-session"
 
-    def fake_create_session_watcher(session: str, *, interval_ms: int) -> object:
+    def fake_launch(session: str, *, interval_ms: int) -> int:
         raise WatchUnavailableError("tkinter is unavailable in the active Python environment")
 
-    monkeypatch.setattr(cli, "create_session_watcher", fake_create_session_watcher)
+    monkeypatch.setattr(cli, "_launch_detached_watcher", fake_launch)
 
     exit_code = cli.main(["new", "--session", str(session_path), "--watch", "--json"])
     captured = capsys.readouterr()
@@ -328,37 +327,25 @@ def test_new_watch_json_reports_session_when_watcher_fails(
     assert captured.err == ""
 
 
-def test_new_watch_json_emits_session_before_watcher_runs(
+def test_new_watch_json_emits_session_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     from linework import cli
 
     session_path = tmp_path / "watched-session"
-    seen: dict[str, object] = {}
 
-    class FakeWatcher:
-        def run(self) -> None:
-            payload = json.loads(capsys.readouterr().out)
-            seen["payload"] = payload
+    def fake_launch(session: str, *, interval_ms: int) -> int:
+        return 12345
 
-    def fake_create_session_watcher(session: str, *, interval_ms: int) -> FakeWatcher:
-        seen["session"] = session
-        seen["interval_ms"] = interval_ms
-        return FakeWatcher()
-
-    monkeypatch.setattr(cli, "create_session_watcher", fake_create_session_watcher)
+    monkeypatch.setattr(cli, "_launch_detached_watcher", fake_launch)
 
     exit_code = cli.main(["new", "--session", str(session_path), "--watch", "--json"])
     captured = capsys.readouterr()
 
     assert exit_code == 0
-    assert seen["session"] == str(session_path)
-    assert seen["interval_ms"] == DEFAULT_INTERVAL_MS
-    payload = seen["payload"]
-    assert isinstance(payload, dict)
+    payload = json.loads(captured.out)
     assert payload["session_path"] == str(session_path)
     assert payload["session_id"] == "watched-session"
-    assert captured.out == ""
     assert captured.err == ""
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import tempfile
 from collections.abc import Callable, Sequence
@@ -30,7 +31,7 @@ from linework.storage.session import (
     export_session,
     inspect_session,
 )
-from linework.watch import DEFAULT_INTERVAL_MS, WatchError, create_session_watcher, watch_session
+from linework.watch import DEFAULT_INTERVAL_MS, WatchError, watch_session
 
 
 class _HelpFormatter(
@@ -258,6 +259,11 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Polling interval in milliseconds (default: {DEFAULT_INTERVAL_MS}).",
     )
 
+    # --- _watch-impl (hidden, used by detached watcher) ---
+    watch_impl_parser = subparsers.add_parser("_watch-impl")
+    watch_impl_parser.add_argument("--session", required=True)
+    watch_impl_parser.add_argument("--interval-ms", type=int, default=DEFAULT_INTERVAL_MS)
+
     # --- draw ---
     draw_parser = subparsers.add_parser(
         "draw",
@@ -356,6 +362,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return cmd_export(args)
     if args.command == "watch":
         return cmd_watch(args)
+    if args.command == "_watch-impl":
+        return _cmd_watch_impl(args)
     if args.command == "draw":
         return cmd_draw(args)
     if args.command == "edit":
@@ -1193,19 +1201,22 @@ def cmd_new(args: argparse.Namespace) -> int:
 
     if args.watch:
         try:
-            watcher = create_session_watcher(
+            pid = _launch_detached_watcher(
                 result.session_path,
                 interval_ms=DEFAULT_INTERVAL_MS,
             )
         except (OSError, SessionError, WatchError) as exc:
             if args.json:
-                return _error(f"{exc}; session created at {result.session_path}", use_json=True)
+                return _error(
+                    f"{exc}; session created at {result.session_path}",
+                    use_json=True,
+                )
             else:
                 _emit_created_session_result(result, use_json=False)
                 return _error(str(exc), use_json=False)
-
         _emit_created_session_result(result, use_json=args.json)
-        watcher.run()
+        if not args.json:
+            print(f"Watcher opened (pid {pid})")
         return 0
 
     _emit_created_session_result(result, use_json=args.json)
@@ -1377,12 +1388,70 @@ def cmd_export(args: argparse.Namespace) -> int:
 
 
 def cmd_watch(args: argparse.Namespace) -> int:
-    """Handle ``linework watch``."""
+    """Handle ``linework watch`` by launching a detached watcher process."""
+    try:
+        pid = _launch_detached_watcher(args.session, interval_ms=args.interval_ms)
+    except (OSError, SessionError, WatchError) as exc:
+        return _error(str(exc), use_json=False)
+    print(f"Watcher opened (pid {pid})")
+    return 0
+
+
+def _cmd_watch_impl(args: argparse.Namespace) -> int:
+    """Hidden command: run the watcher in the foreground (used by detached launcher)."""
     try:
         watch_session(args.session, interval_ms=args.interval_ms)
     except (OSError, SessionError, WatchError) as exc:
         return _error(str(exc), use_json=False)
     return 0
+
+
+def _launch_detached_watcher(
+    session: str,
+    *,
+    interval_ms: int = DEFAULT_INTERVAL_MS,
+) -> int:
+    """Spawn a fully detached watcher subprocess that survives the parent shell.
+
+    Validates the session exists before spawning. Returns the child PID.
+    """
+    from linework.storage.session import read_session_metadata
+
+    resolved = Path(session).expanduser().resolve()
+    read_session_metadata(resolved)
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "linework",
+        "_watch-impl",
+        "--session",
+        str(session),
+        "--interval-ms",
+        str(interval_ms),
+    ]
+
+    if sys.platform == "win32":
+        CREATE_NEW_PROCESS_GROUP = 0x00000200
+        DETACHED_PROCESS = 0x00000008
+        process = subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            creationflags=CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS,
+        )
+    else:
+        process = subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            close_fds=True,
+            start_new_session=True,
+        )
+    return process.pid
 
 
 # ---------------------------------------------------------------------------
