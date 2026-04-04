@@ -8,8 +8,9 @@ tweak things (*make the red box wider, change the background, relabel
 that arrow*), editing the shapes in place instead of regenerating the image 
 from scratch.
 
-The agent can a read-only **watcher window** to show the drawing come together in 
-real time, or work in a background process with no graphical interface.
+When the agent starts a `linework` session a read-only **watcher window** 
+opens to show the drawing come together in real time. The agent can also use 
+linework in a background process with no graphical interface.
 
 ![screenshot of an agent using linework to make a chart and a picture](screenshot.png)
 
