@@ -136,7 +136,43 @@ uv run mypy src
 Milestones must not be considered complete until this suite is green, plus any
 milestone-specific validation defined in the Issue.
 
-## 6. Environment notes
+## 6. Versioning
+
+The project version is derived automatically from **git tags** using `hatch-vcs`
+(backed by `setuptools-scm`). There is no hardcoded version string to maintain.
+
+### How it works
+
+| Repository state | Reported version |
+|---|---|
+| On tag `v0.2.0` | `0.2.0` |
+| 1 commit after `v0.2.0` | `0.2.1.dev1` |
+| 5 commits after `v0.2.0` | `0.2.1.dev5` |
+
+The build generates `src/linework/_version.py` (gitignored) which is imported
+by `linework/__init__.py`.
+
+### Creating a release
+
+Tag the commit and push the tag:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+After tagging, `uv sync --reinstall-package linework` picks up the clean version.
+
+### Rules
+
+- Do **not** edit `src/linework/_version.py` — it is auto-generated.
+- Do **not** add a static `version` field to `pyproject.toml` — the version is
+  declared `dynamic`.
+- Always use annotated or lightweight tags prefixed with `v` (e.g., `v0.2.0`).
+- After tagging, run `uv sync --reinstall-package linework` to refresh the
+  installed version before validating.
+
+## 7. Environment notes
 
 In restricted or sandboxed environments, it is acceptable to keep `uv` state local
 to the repo, for example:
@@ -152,7 +188,7 @@ override the default machine-local `~/.linework` root.
 These are environment workarounds for development tooling. They do not change the
 runtime or packaging requirements of `linework`.
 
-## 7. Agent interaction guidelines
+## 8. Agent interaction guidelines
 
 ### Multiple-choice questions
 

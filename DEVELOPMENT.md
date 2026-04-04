@@ -167,5 +167,7 @@ Implementation notes:
 - `new --watch --json` keeps creating the session, but returns an error-only JSON envelope on watcher startup failure
 - `linework edit` can select by label when `--id` is omitted; use `--id` when relabeling
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
+- version is derived from git tags via `hatch-vcs`; there is no hardcoded version string (see copilot-instructions §6)
+- Windows: `_is_pid_alive` uses Win32 `OpenProcess` API instead of `os.kill(pid, 0)` (which sends `CTRL_C_EVENT` on Windows)
 
 Next milestone: **TBD.** Deferred future directions are canvas resize / fit-to-contents, grouping, auto-layout, higher-level composites, and themes / reusable styles.
