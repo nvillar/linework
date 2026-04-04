@@ -73,4 +73,6 @@ linework inspect --session PATH --json
 linework export --session PATH --out diagram.png
 ```
 
+The watcher window runs as its own process, so it stays open while the agent works across multiple commands.
+
 Run `linework` with no arguments for the full reference.
