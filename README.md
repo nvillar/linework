@@ -57,20 +57,4 @@ linework inspect --session PATH --json
 linework export --session PATH --out diagram.png
 ```
 
-Run `linework` with no arguments for the full reference, or `linework schema --json` for a machine-readable manifest.
-
-## Shapes and operations
-
-| Shape    | Draw | Edit | Notes                                     |
-|----------|------|------|-------------------------------------------|
-| line     | ✓    | ✓    |                                           |
-| arrow    | ✓    | ✓    | Configurable arrowhead placement and size |
-| rect     | ✓    | ✓    |                                           |
-| ellipse  | ✓    | ✓    |                                           |
-| circle   | ✓    | ✓    | Convenience alias for ellipse             |
-| polyline | ✓    | ✓    |                                           |
-| polygon  | ✓    | ✓    | Filled closed shape                       |
-| text     | ✓    | ✓    | Anchor alignment and word wrapping        |
-| image    | ✓    | ✓    | Import from file with auto aspect ratio   |
-
-All objects support `delete`, `undo`, and label-based selection. A `linework run` batch undoes as one action.
+Run `linework` with no arguments for the full reference.
