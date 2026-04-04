@@ -1,15 +1,15 @@
 # Linework
 
-Linework is an agent-first CLI sketch tool. Think MS Paint for agents — but with
-a retained scene model underneath.
+Linework is a simple sketching tool that can be used by any agent
+that has access to a command-line session.
 
-An agent can draw shapes, place text, build diagrams, and export PNGs — all from
+An agent can draw shapes, place text, build diagrams, and export PNGs from
 the command line. Because linework keeps the underlying objects, you can ask the
-agent to tweak things — *make the red box wider, change the background, relabel
-that arrow* — and it edits in place instead of regenerating from scratch.
+agent to tweak things (*make the red box wider, change the background, relabel
+that arrow*) and it edits in place instead of regenerating from scratch.
 
-The agent can work in the background, or you can open a read-only **watcher
-window** to see the drawing come together in real time.
+The agent can work in the background, or can open a read-only **watcher
+window** to show the drawing come together in real time.
 
 ## Prerequisites
 
@@ -28,10 +28,10 @@ Give your agent a prompt like this:
 
 > You have access to the `linework` CLI for creating drawings and diagrams.
 > Run `linework` with no arguments to learn how it works. Start by creating a
-> session with `--watch` so I can see what you draw, then draw something for me.
+> session with `--watch` so I can see what you draw, then draw a self-portrait.
 
 The agent will read the built-in bootstrap guide, create a session, open the
-watcher window on your screen, and start drawing. That's it.
+watcher window on your screen, and start drawing. 
 
 ## Under the hood
 
