@@ -50,6 +50,13 @@ session, then draw a self-portrait.
 The agent will read the built-in bootstrap guide, create a session, open the
 watcher window on your screen, and start drawing.
 
+The agent might take some time to first explore the tool, learn how it works, 
+and finally put together a drawing. Making changes should be much faster, and
+you can watch the drawing update on the watcher window.
+
+If the agent supports memory, you can ask it to remember about the tool and how
+to use it to avoid having to learn it every time.
+
 ## Tip: Visual feedback
 
  If your agent supports image understanding, a useful pattern is to have it view 
