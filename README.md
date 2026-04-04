@@ -34,6 +34,10 @@ uv tool install --link-mode copy git+https://github.com/nvillar/linework.git
 
 Give your agent a prompt like this:
 
+> Use the `linework` cli to draw a self-portrait. Open a watcher for me.
+
+Or, if you want to be more explicit: 
+
 > You have access to the `linework` CLI for creating drawings and diagrams.
 > Run `linework` with no arguments to learn how it works. Start by creating a
 > session with `--watch` so I can see what you draw, then draw a self-portrait.
