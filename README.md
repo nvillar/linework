@@ -8,8 +8,8 @@ the command line. Because linework keeps the underlying objects, you can ask the
 agent to tweak things — *make the red box wider, change the background, relabel
 that arrow* — and it edits in place instead of regenerating from scratch.
 
-It runs fully headless for CI and automation, or with a read-only **watcher
-window** so you can see the drawing come together in real time.
+The agent can work in the background, or you can open a read-only **watcher
+window** to see the drawing come together in real time.
 
 ## Prerequisites
 
