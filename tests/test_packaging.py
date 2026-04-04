@@ -74,6 +74,7 @@ def test_uv_tool_install_from_project_runs_installed_cli(tmp_path: Path) -> None
     env["HOME"] = str(home_dir)
     if sys.platform == "win32":
         env["USERPROFILE"] = str(home_dir)
+        env["APPDATA"] = str(home_dir / "AppData" / "Roaming")
     env["UV_CACHE_DIR"] = str(cache_dir)
     env["LINEWORK_HOME"] = str(tmp_path / "linework-home")
 
@@ -89,7 +90,7 @@ def test_uv_tool_install_from_project_runs_installed_cli(tmp_path: Path) -> None
 
     version_result = _run([str(binary_path), "--version"], env=env)
     assert version_result.returncode == 0
-    assert version_result.stdout.strip() == "0.1.0"
+    assert version_result.stdout.strip().startswith("0.")
 
     session_path = tmp_path / "installed-session"
     new_result = _run(

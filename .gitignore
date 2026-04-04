@@ -9,3 +9,5 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+src/linework/_version.py
+%TEMP%/

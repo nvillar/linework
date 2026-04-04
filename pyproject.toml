@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling>=1.27.0"]
+requires = ["hatchling>=1.27.0", "hatch-vcs>=0.4.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "linework"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Agent-first CLI sketch tool."
 readme = "SPEC.md"
 requires-python = ">=3.12,<3.13"
@@ -52,3 +52,10 @@ show_error_codes = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-q"]
+
+[tool.hatch.version]
+source = "vcs"
+raw-options = { local_scheme = "no-local-version" }
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/linework/_version.py"
