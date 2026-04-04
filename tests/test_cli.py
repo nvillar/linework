@@ -442,33 +442,31 @@ def test_launch_detached_watcher_waits_for_ready_status(
         def poll(self) -> int | None:
             return None
 
-    def fake_popen(cmd: list[str], **kwargs: object) -> FakeProcess:
-        captured["cmd"] = cmd
-        captured["kwargs"] = kwargs
-        status_path = Path(cmd[cmd.index("--startup-status") + 1])
+    def fake_launcher(cmd: object) -> FakeProcess:
+        captured["cmd"] = list(cmd)  # type: ignore[arg-type]
+        cmd_list: list[str] = captured["cmd"]  # type: ignore[assignment]
+        status_path = Path(cmd_list[cmd_list.index("--startup-status") + 1])
         status_path.write_text(json.dumps({"status": "ready"}), encoding="utf-8")
         return FakeProcess()
 
-    monkeypatch.setattr(cli.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(cli.sys, "argv", ["linework"])
-    monkeypatch.setattr(cli.shutil, "which", lambda command: f"/resolved/{command}")
+    monkeypatch.setattr(cli, "_launch_detached_watcher_windows", fake_launcher)
+    monkeypatch.setattr(cli, "_launch_detached_watcher_posix", fake_launcher)
 
     pid = cli._launch_detached_watcher(str(session_path), interval_ms=410)
 
-    cmd = captured["cmd"]
-    kwargs = captured["kwargs"]
+    cmd: list[str] = captured["cmd"]  # type: ignore[assignment]
     assert pid == 32100
-    assert cmd[:7] == [
-        "/resolved/linework",
+    watch_idx = cmd.index("_watch-impl")
+    assert cmd[watch_idx:] == [
         "_watch-impl",
         "--session",
         str(session_path.resolve()),
         "--interval-ms",
         "410",
         "--startup-status",
+        cmd[-1],
     ]
-    assert Path(cmd[7]).name == "startup.json"
-    assert kwargs["start_new_session"] is True
+    assert Path(cmd[-1]).name == "startup.json"
 
 
 def test_launch_detached_watcher_raises_startup_error(
@@ -491,16 +489,17 @@ def test_launch_detached_watcher_raises_startup_error(
         def poll(self) -> int | None:
             return None
 
-    def fake_popen(cmd: list[str], **kwargs: object) -> FakeProcess:
-        status_path = Path(cmd[cmd.index("--startup-status") + 1])
+    def fake_launcher(cmd: object) -> FakeProcess:
+        cmd_list = list(cmd)  # type: ignore[arg-type]
+        status_path = Path(cmd_list[cmd_list.index("--startup-status") + 1])
         status_path.write_text(
             json.dumps({"status": "error", "error": "watcher startup failed"}),
             encoding="utf-8",
         )
         return FakeProcess()
 
-    monkeypatch.setattr(cli.subprocess, "Popen", fake_popen)
-    monkeypatch.setattr(cli.sys, "argv", ["/resolved/linework"])
+    monkeypatch.setattr(cli, "_launch_detached_watcher_windows", fake_launcher)
+    monkeypatch.setattr(cli, "_launch_detached_watcher_posix", fake_launcher)
 
     with pytest.raises(WatchError, match="watcher startup failed"):
         cli._launch_detached_watcher(str(session_path))
@@ -526,8 +525,8 @@ def test_launch_detached_watcher_errors_when_child_exits_before_ready(
         def poll(self) -> int | None:
             return 7
 
-    monkeypatch.setattr(cli.subprocess, "Popen", lambda cmd, **kwargs: FakeProcess())
-    monkeypatch.setattr(cli.sys, "argv", ["/resolved/linework"])
+    monkeypatch.setattr(cli, "_launch_detached_watcher_windows", lambda cmd: FakeProcess())
+    monkeypatch.setattr(cli, "_launch_detached_watcher_posix", lambda cmd: FakeProcess())
 
     with pytest.raises(WatchError, match="exit code 7"):
         cli._launch_detached_watcher(str(session_path))

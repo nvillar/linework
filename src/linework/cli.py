@@ -1548,7 +1548,7 @@ def _watch_impl_command() -> list[str]:
     if sys.platform == "win32":
         return [_windows_gui_python_executable(), "-m", "linework", "_watch-impl"]
 
-    argv0 = sys.argv[0] if sys.argv else ""
+    argv0 = sys.argv[0] if sys.argv else ""  # type: ignore[unreachable]
     if argv0.endswith("__main__.py") or not argv0:
         return [sys.executable, "-m", "linework", "_watch-impl"]
 

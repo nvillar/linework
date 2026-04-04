@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -23,16 +24,35 @@ def lock_path_for_session(session_path: Path) -> Path:
 
 
 def _is_pid_alive(pid: int) -> bool:
-    """Check whether a process with the given PID is still running."""
+    """Check whether a process with the given PID is still running.
+
+    On Windows, ``os.kill(pid, 0)`` sends ``CTRL_C_EVENT`` (whose value is 0)
+    instead of probing for existence, so we use the Win32 API directly.
+    """
     if pid <= 0:
         return False
-    try:
+    if sys.platform == "win32":
+        return _is_pid_alive_windows(pid)
+    try:  # type: ignore[unreachable]
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
     except PermissionError:
         # Process exists but we lack permission to signal it.
         return True
+    return True
+
+
+def _is_pid_alive_windows(pid: int) -> bool:
+    """Check process existence on Windows via OpenProcess."""
+    import ctypes
+
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    kernel32 = getattr(ctypes, "WinDLL")("kernel32", use_last_error=True)
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return False
+    kernel32.CloseHandle(handle)
     return True
 
 

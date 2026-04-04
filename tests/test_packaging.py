@@ -72,6 +72,8 @@ def test_uv_tool_install_from_project_runs_installed_cli(tmp_path: Path) -> None
     cache_dir = tmp_path / "uv-cache"
     env = os.environ.copy()
     env["HOME"] = str(home_dir)
+    if sys.platform == "win32":
+        env["USERPROFILE"] = str(home_dir)
     env["UV_CACHE_DIR"] = str(cache_dir)
     env["LINEWORK_HOME"] = str(tmp_path / "linework-home")
 
@@ -81,7 +83,8 @@ def test_uv_tool_install_from_project_runs_installed_cli(tmp_path: Path) -> None
     )
     assert install_result.returncode == 0, install_result.stderr
 
-    binary_path = home_dir / ".local" / "bin" / "linework"
+    binary_name = "linework.exe" if sys.platform == "win32" else "linework"
+    binary_path = home_dir / ".local" / "bin" / binary_name
     assert binary_path.is_file()
 
     version_result = _run([str(binary_path), "--version"], env=env)
