@@ -8,7 +8,8 @@ from linework.constants import (
 
 _DEFAULTS_LINE = (
     f"Defaults: canvas {DEFAULT_CANVAS_WIDTH}x{DEFAULT_CANVAS_HEIGHT}, "
-    f"background {DEFAULT_CANVAS_BACKGROUND}. The watcher is read-only."
+    f"background {DEFAULT_CANVAS_BACKGROUND}. A watcher window opens automatically "
+    f"(pass --headless to suppress)."
 )
 
 BOOTSTRAP_TEXT = f"""\
@@ -23,7 +24,7 @@ Golden path:
   1. Discover the command surface
      linework schema --json
 
-  2. Create a session
+  2. Create a session (opens a watcher window for the user)
      linework new --name idea-board --json
 
   3. Draw via JSONL batch (primary interface)
@@ -36,8 +37,7 @@ Golden path:
      linework edit rect --session PATH --id obj_000001 --fill #CCE5FF --json
       linework delete --session PATH --label note-box --json
 
-  6. Watch or export
-      linework watch --session PATH
+  6. Export
       linework export --session PATH --out out.png
       linework run --file ops.jsonl --out out.png
 

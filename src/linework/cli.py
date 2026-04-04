@@ -52,14 +52,14 @@ Golden path:
   linework run --session PATH --json < ops.jsonl
   linework inspect --session PATH --json
   linework edit rect --session PATH --id obj_000001 --fill #CCE5FF --json
-  linework watch --session PATH
   linework export --session PATH --out out.png
 """
 
 _NEW_EPILOG = f"""\
 Examples:
   linework new --json
-  linework new --name idea-board --watch
+  linework new --name idea-board
+  linework new --name headless-batch --headless
   linework new --width {DEFAULT_CANVAS_WIDTH} --height {DEFAULT_CANVAS_HEIGHT}
 """
 
@@ -244,9 +244,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Canvas background color in #RRGGBB or #RRGGBBAA form.",
     )
     new_parser.add_argument(
-        "--watch",
+        "--headless",
         action="store_true",
-        help="Open the watcher after session creation.",
+        help="Skip the watcher window (opened by default).",
     )
     new_parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
@@ -1256,21 +1256,16 @@ def cmd_new(args: argparse.Namespace) -> int:
     except (OSError, SessionError, SessionLockedError) as exc:
         return _error(str(exc), use_json=args.json)
 
-    if args.watch:
+    if not args.headless:
         try:
             pid = _launch_detached_watcher(
                 result.session_path,
                 interval_ms=DEFAULT_INTERVAL_MS,
             )
-        except (OSError, SessionError, WatchError) as exc:
-            if args.json:
-                return _error(
-                    f"{exc}; session created at {result.session_path}",
-                    use_json=True,
-                )
-            else:
-                _emit_created_session_result(result, use_json=False)
-                return _error(str(exc), use_json=False)
+        except (OSError, SessionError, WatchError):
+            # Watcher is best-effort when launched by default.
+            _emit_created_session_result(result, use_json=args.json)
+            return 0
         _emit_created_session_result(result, use_json=args.json)
         if not args.json:
             print(f"Watcher opened (pid {pid})")

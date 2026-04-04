@@ -164,7 +164,7 @@ Implementation notes:
 - `linework run --out` can export either an existing session or a temporary throwaway batch result
 - `draw.arrow` / `edit.arrow` support `arrowhead` (`end`, `start`, `both`, `none`) and optional pixel-sized `arrow_size`
 - text objects now support horizontal `anchor` plus width-based wrapping via `max_width`
-- `new --watch --json` keeps creating the session, but returns an error-only JSON envelope on watcher startup failure
+- `linework new` opens the watcher by default; pass `--headless` to suppress; watcher failure is silent
 - `linework edit` can select by label when `--id` is omitted; use `--id` when relabeling
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 - version is derived from git tags via `hatch-vcs`; there is no hardcoded version string (see copilot-instructions §6)

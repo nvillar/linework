@@ -488,7 +488,7 @@ Required semantics:
 
 - default canvas size: `800x800`
 - default background: `#FFFFFF`
-- `--watch` opens the watcher after session creation
+- the watcher opens automatically after session creation unless `--headless` is passed
 
 Flags:
 
@@ -497,7 +497,7 @@ Flags:
 - `--width INT`
 - `--height INT`
 - `--background #RRGGBB`
-- `--watch`
+- `--headless`
 - `--json`
 
 ### 9.4 `linework run`

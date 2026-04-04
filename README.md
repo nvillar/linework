@@ -8,7 +8,7 @@ tweak things (*make the red box wider, change the background, relabel
 that arrow*), editing the shapes in place instead of regenerating the image 
 from scratch.
 
-The agent can work in the background, or can open a read-only **watcher
+The agent can work in the background, or — by default — open a read-only **watcher
 window** to show the drawing come together in real time.
 
 ![screenshot of an agent using linework to make a chart and a picture](screenshot.png)
@@ -40,10 +40,10 @@ Or, if you want to be more explicit:
 
 > You have access to the `linework` CLI for creating drawings and diagrams.
 > Run `linework` with no arguments to learn how it works. Start by creating a
-> session with `--watch` so I can see what you draw, then draw a self-portrait.
+> session, then draw a self-portrait.
 
 The agent will read the built-in bootstrap guide, create a session, open the
-watcher window on your screen, and start drawing. 
+watcher window on your screen, and start drawing.
 
 ## Tip: Visual feedback
 
@@ -62,8 +62,8 @@ Every drawing lives in a portable **session directory**. The primary interface i
 is doing behind the scenes:
 
 ```bash
-# Create a session with a live watcher
-linework new --name demo --watch
+# Create a session (watcher window opens automatically)
+linework new --name demo
 
 # Draw via JSONL batch (in another terminal)
 cat <<'EOF' | linework run --session PATH --json
