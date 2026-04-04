@@ -1,10 +1,15 @@
 # Linework
 
-Linework is an agent-first CLI sketch tool — MS Paint for agents. It lets an AI
-agent create, edit, and export drawings entirely from the command line, with no
-interactive prompts and no GUI required for drawing.
+Linework is an agent-first CLI sketch tool. Think MS Paint for agents — but with
+a retained scene model underneath.
 
-A read-only **watcher window** lets a human observe drawing progress in real
+An agent can draw shapes, place text, build diagrams, and export PNGs, all from
+the command line with no GUI and no interactive prompts. Because linework keeps
+the underlying objects, you can ask the agent to tweak things — *make the red box
+wider, change the background, relabel that arrow* — and it edits in place instead
+of regenerating from scratch.
+
+A read-only **watcher window** lets you see the drawing come together in real
 time.
 
 ## Prerequisites
