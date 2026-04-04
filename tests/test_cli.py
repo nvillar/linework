@@ -533,6 +533,132 @@ def test_launch_detached_watcher_errors_when_child_exits_before_ready(
         cli._launch_detached_watcher(str(session_path))
 
 
+def test_watch_impl_command_prefers_pythonw_on_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    from linework import cli
+
+    monkeypatch.setattr(cli.sys, "platform", "win32")
+    monkeypatch.setattr(cli.sys, "executable", r"C:\Python312\python.exe")
+    monkeypatch.setattr(cli.Path, "is_file", lambda self: str(self).endswith("pythonw.exe"))
+
+    assert cli._watch_impl_command() == [
+        r"C:\Python312\pythonw.exe",
+        "-m",
+        "linework",
+        "_watch-impl",
+    ]
+
+
+def test_launch_detached_watcher_windows_uses_powershell_start_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from linework import cli
+
+    captured: dict[str, object] = {}
+
+    def fake_desktop_check() -> None:
+        captured["desktop_checked"] = True
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return subprocess.CompletedProcess(command, 0, stdout="41000", stderr="")
+
+    monkeypatch.setattr(cli, "_ensure_windows_interactive_desktop", fake_desktop_check)
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    process = cli._launch_detached_watcher_windows(
+        [r"C:\Python312\pythonw.exe", "-m", "linework", "_watch-impl", "--session", r"C:\tmp\s"]
+    )
+
+    assert process.pid == 41000
+    assert captured["desktop_checked"] is True
+    command = captured["command"]
+    kwargs = captured["kwargs"]
+    assert command[:6] == [
+        "powershell.exe",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+    ]
+    assert "Start-Process" in str(command[6])
+    assert "-PassThru" in str(command[6])
+    assert kwargs["capture_output"] is True
+    assert kwargs["text"] is True
+
+
+def test_launch_detached_watcher_windows_requires_interactive_desktop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from linework import cli
+
+    def fake_desktop_check() -> None:
+        raise WatchError("watcher requires an interactive Windows desktop session")
+
+    monkeypatch.setattr(cli, "_ensure_windows_interactive_desktop", fake_desktop_check)
+
+    with pytest.raises(WatchError, match="interactive Windows desktop session"):
+        cli._launch_detached_watcher_windows(["pythonw.exe", "-m", "linework", "_watch-impl"])
+
+
+def test_launch_detached_watcher_uses_windows_launcher(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import cli
+
+    session_path = tmp_path / "watch-session"
+    create_session(
+        session=str(session_path),
+        name=None,
+        width=800,
+        height=800,
+        background="#FFFFFF",
+    )
+
+    captured: dict[str, object] = {}
+
+    class FakeProcess:
+        pid = 41001
+
+        def poll(self) -> int | None:
+            return None
+
+    def fake_windows_launcher(cmd: list[str]) -> FakeProcess:
+        captured["cmd"] = cmd
+        return FakeProcess()
+
+    def fake_await(process: object, status_path: Path) -> None:
+        captured["pid"] = getattr(process, "pid")
+        captured["status_name"] = status_path.name
+
+    monkeypatch.setattr(cli.sys, "platform", "win32")
+    monkeypatch.setattr(
+        cli,
+        "_watch_impl_command",
+        lambda: [r"C:\Python312\pythonw.exe", "-m", "linework", "_watch-impl"],
+    )
+    monkeypatch.setattr(cli, "_launch_detached_watcher_windows", fake_windows_launcher)
+    monkeypatch.setattr(cli, "_await_watcher_startup", fake_await)
+
+    pid = cli._launch_detached_watcher(str(session_path), interval_ms=333)
+
+    assert pid == 41001
+    assert captured["pid"] == 41001
+    assert captured["status_name"] == "startup.json"
+    assert captured["cmd"][:7] == [
+        r"C:\Python312\pythonw.exe",
+        "-m",
+        "linework",
+        "_watch-impl",
+        "--session",
+        str(session_path.resolve()),
+        "--interval-ms",
+    ]
+    assert captured["cmd"][7] == "333"
+    assert captured["cmd"][8] == "--startup-status"
+
+
 def test_writer_lock_blocks_overlapping_access(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -11,6 +11,7 @@ import tempfile
 import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import Protocol
 
 from linework.bootstrap import BOOTSTRAP_TEXT
 from linework.capabilities import OTHER_OPERATIONS, operations_for_namespace, schema_manifest
@@ -126,6 +127,56 @@ action.
 """
 
 _WATCHER_STARTUP_TIMEOUT_S = 5.0
+
+
+class _WatchedProcess(Protocol):
+    """Minimal process interface used during watcher startup."""
+
+    pid: int
+
+    def poll(self) -> int | None:
+        """Return None while still running, else the exit code."""
+
+
+class _WindowsProcess:
+    """Poll a Windows process by PID without holding a live subprocess handle."""
+
+    def __init__(self, pid: int) -> None:
+        self.pid = pid
+
+    def poll(self) -> int | None:
+        """Return None while the process is still active, else its exit code."""
+        import ctypes
+
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        SYNCHRONIZE = 0x00100000
+        STILL_ACTIVE = 259
+
+        win_dll = getattr(ctypes, "WinDLL")
+        kernel32 = win_dll("kernel32", use_last_error=True)
+        open_process = kernel32.OpenProcess
+        open_process.argtypes = [ctypes.c_uint32, ctypes.c_bool, ctypes.c_uint32]
+        open_process.restype = ctypes.c_void_p
+        get_exit_code = kernel32.GetExitCodeProcess
+        get_exit_code.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
+        get_exit_code.restype = ctypes.c_bool
+        close_handle = kernel32.CloseHandle
+        close_handle.argtypes = [ctypes.c_void_p]
+        close_handle.restype = ctypes.c_bool
+
+        handle = open_process(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, False, self.pid)
+        if not handle:
+            return 1
+
+        try:
+            exit_code = ctypes.c_uint32()
+            if not get_exit_code(handle, ctypes.byref(exit_code)):
+                return 1
+            if exit_code.value == STILL_ACTIVE:
+                return None
+            return int(exit_code.value)
+        finally:
+            close_handle(handle)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1465,7 +1516,7 @@ def _read_watcher_startup_status(status_path: Path) -> dict[str, str] | None:
     return normalized
 
 
-def _await_watcher_startup(process: subprocess.Popen[bytes], status_path: Path) -> None:
+def _await_watcher_startup(process: _WatchedProcess, status_path: Path) -> None:
     """Wait for the detached watcher child to confirm startup or fail."""
     deadline = time.monotonic() + _WATCHER_STARTUP_TIMEOUT_S
     while time.monotonic() < deadline:
@@ -1493,6 +1544,9 @@ def _await_watcher_startup(process: subprocess.Popen[bytes], status_path: Path) 
 
 def _watch_impl_command() -> list[str]:
     """Build the command used to re-invoke linework for the hidden watcher child."""
+    if sys.platform == "win32":
+        return [_windows_gui_python_executable(), "-m", "linework", "_watch-impl"]
+
     argv0 = sys.argv[0] if sys.argv else ""
     if argv0.endswith("__main__.py") or not argv0:
         return [sys.executable, "-m", "linework", "_watch-impl"]
@@ -1502,6 +1556,111 @@ def _watch_impl_command() -> list[str]:
     else:
         executable = shutil.which(argv0) or argv0
     return [executable, "_watch-impl"]
+
+
+def _windows_gui_python_executable() -> str:
+    """Prefer pythonw.exe for watcher children on Windows when available."""
+    executable = sys.executable
+    lower = executable.lower()
+    if lower.endswith("\\python.exe") or lower.endswith("/python.exe"):
+        pythonw = f"{executable[:-10]}pythonw.exe"
+        if Path(pythonw).is_file():
+            return pythonw
+    return executable
+
+
+def _escape_powershell_string(value: str) -> str:
+    """Escape a value for use inside a single-quoted PowerShell string literal."""
+    return value.replace("'", "''")
+
+
+def _ensure_windows_interactive_desktop() -> None:
+    """Fail clearly when watcher launch has no access to an interactive desktop."""
+    import ctypes
+
+    DESKTOP_READOBJECTS = 0x0001
+
+    win_dll = getattr(ctypes, "WinDLL")
+    user32 = win_dll("user32", use_last_error=True)
+    open_input_desktop = user32.OpenInputDesktop
+    open_input_desktop.argtypes = [ctypes.c_uint32, ctypes.c_bool, ctypes.c_uint32]
+    open_input_desktop.restype = ctypes.c_void_p
+    close_desktop = user32.CloseDesktop
+    close_desktop.argtypes = [ctypes.c_void_p]
+    close_desktop.restype = ctypes.c_bool
+
+    desktop = open_input_desktop(0, False, DESKTOP_READOBJECTS)
+    if not desktop:
+        raise WatchError("watcher requires an interactive Windows desktop session")
+
+    close_desktop(desktop)
+
+
+def _launch_detached_watcher_windows(cmd: Sequence[str]) -> _WatchedProcess:
+    """Launch the watcher through PowerShell Start-Process on Windows."""
+    _ensure_windows_interactive_desktop()
+    if not cmd:
+        raise WatchError("watcher launch command is empty")
+
+    file_path = _escape_powershell_string(str(cmd[0]))
+    argument_list = ", ".join(f"'{_escape_powershell_string(str(arg))}'" for arg in cmd[1:])
+    script = (
+        f"$proc = Start-Process -FilePath '{file_path}' "
+        f"-ArgumentList @({argument_list}) -PassThru; "
+        "[Console]::Out.Write($proc.Id)"
+    )
+
+    last_error: OSError | None = None
+    for launcher in ("powershell.exe", "pwsh.exe"):
+        try:
+            result = subprocess.run(
+                [
+                    launcher,
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    script,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except OSError as exc:
+            last_error = exc
+            continue
+
+        if result.returncode != 0:
+            message = result.stderr.strip() or result.stdout.strip() or str(result.returncode)
+            raise WatchError(f"unable to start watcher via {launcher}: {message}")
+
+        pid_text = result.stdout.strip()
+        try:
+            pid = int(pid_text)
+        except ValueError as exc:
+            raise WatchError(
+                f"unable to determine watcher pid from {launcher}: {pid_text or 'no output'}"
+            ) from exc
+        return _WindowsProcess(pid)
+
+    if last_error is not None:
+        raise WatchError("unable to find PowerShell to launch watcher") from last_error
+    raise WatchError("unable to launch watcher on Windows")
+
+
+def _launch_detached_watcher_posix(cmd: Sequence[str]) -> _WatchedProcess:
+    """Launch the watcher as a detached child on Unix-like platforms."""
+    devnull = open("/dev/null", "w")  # noqa: SIM115
+    process = subprocess.Popen(
+        list(cmd),
+        stdout=devnull,
+        stderr=devnull,
+        close_fds=True,
+        start_new_session=True,
+    )
+    devnull.close()
+    return process
 
 
 def _launch_detached_watcher(
@@ -1529,29 +1688,12 @@ def _launch_detached_watcher(
         ]
 
         if sys.platform == "win32":
-            CREATE_NEW_PROCESS_GROUP = 0x00000200
-            DETACHED_PROCESS = 0x00000008
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                close_fds=True,
-                creationflags=CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS,
-            )
+            process = _launch_detached_watcher_windows(cmd)
         else:
             # Use file-based /dev/null rather than subprocess.DEVNULL.
             # On macOS, subprocess.DEVNULL can interfere with tkinter's
             # Tcl resource discovery when stdin is redirected.
-            devnull = open("/dev/null", "w")  # noqa: SIM115
-            process = subprocess.Popen(
-                cmd,
-                stdout=devnull,
-                stderr=devnull,
-                close_fds=True,
-                start_new_session=True,
-            )
-            devnull.close()
+            process = _launch_detached_watcher_posix(cmd)
 
         _await_watcher_startup(process, status_path)
         return process.pid
