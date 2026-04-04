@@ -46,7 +46,17 @@ def test_draw_help_lists_delivered_primitives_only() -> None:
     result = run_cli("draw", "--help")
 
     assert result.returncode == 0
-    for primitive in ("line", "rect", "ellipse", "polyline", "polygon", "text", "image"):
+    for primitive in (
+        "line",
+        "arrow",
+        "rect",
+        "ellipse",
+        "circle",
+        "polyline",
+        "polygon",
+        "text",
+        "image",
+    ):
         assert primitive in result.stdout
     assert "Examples:" in result.stdout
     assert result.stderr == ""
@@ -56,7 +66,17 @@ def test_edit_help_lists_delivered_primitives_only() -> None:
     result = run_cli("edit", "--help")
 
     assert result.returncode == 0
-    for primitive in ("line", "rect", "ellipse", "polyline", "polygon", "text", "image"):
+    for primitive in (
+        "line",
+        "arrow",
+        "rect",
+        "ellipse",
+        "circle",
+        "polyline",
+        "polygon",
+        "text",
+        "image",
+    ):
         assert primitive in result.stdout
     assert "When --id is omitted" in result.stdout
     assert result.stderr == ""
@@ -150,6 +170,110 @@ def test_draw_polygon_accepts_points_and_fill(tmp_path: Path) -> None:
     assert scene["objects"][0]["fill"] == "#FF66CC"
 
 
+def test_draw_circle_json_creates_ellipse_geometry(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+
+    result = run_cli(
+        "draw",
+        "circle",
+        "--session",
+        str(session_path),
+        "--x",
+        "15",
+        "--y",
+        "20",
+        "--radius",
+        "18",
+        "--fill",
+        "#FF0000",
+        "--json",
+        env=env,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["results"] == [
+        {"op_id": "op_000001", "op": "draw.circle", "object_id": "obj_000001"}
+    ]
+    scene = read_scene(session_path)
+    assert scene["objects"][0]["type"] == "ellipse"
+    assert scene["objects"][0]["x"] == 15.0
+    assert scene["objects"][0]["width"] == 36.0
+    assert scene["objects"][0]["height"] == 36.0
+
+
+def test_draw_arrow_accepts_arrowhead_and_size(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+
+    result = run_cli(
+        "draw",
+        "arrow",
+        "--session",
+        str(session_path),
+        "--x1",
+        "10",
+        "--y1",
+        "40",
+        "--x2",
+        "120",
+        "--y2",
+        "40",
+        "--arrowhead",
+        "both",
+        "--arrow-size",
+        "18",
+        "--json",
+        env=env,
+    )
+
+    assert result.returncode == 0
+    scene = read_scene(session_path)
+    assert scene["objects"][0]["type"] == "arrow"
+    assert scene["objects"][0]["arrowhead"] == "both"
+    assert scene["objects"][0]["arrow_size"] == 18.0
+
+
+def test_edit_circle_keeps_round_geometry(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+
+    draw_result = run_cli(
+        "draw",
+        "circle",
+        "--session",
+        str(session_path),
+        "--x",
+        "10",
+        "--y",
+        "10",
+        "--radius",
+        "15",
+        env=env,
+    )
+    assert draw_result.returncode == 0
+
+    result = run_cli(
+        "edit",
+        "circle",
+        "--session",
+        str(session_path),
+        "--id",
+        "obj_000001",
+        "--radius",
+        "22",
+        "--json",
+        env=env,
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["results"] == [
+        {"op_id": "op_000002", "op": "edit.circle", "object_id": "obj_000001"}
+    ]
+    scene = read_scene(session_path)
+    assert scene["objects"][0]["width"] == 44.0
+    assert scene["objects"][0]["height"] == 44.0
+
+
 def test_edit_rect_json_updates_existing_object(tmp_path: Path) -> None:
     session_path, env = create_cli_session(tmp_path)
 
@@ -195,6 +319,34 @@ def test_edit_rect_json_updates_existing_object(tmp_path: Path) -> None:
     scene = read_scene(session_path)
     assert scene["objects"][0]["x"] == 25.0
     assert scene["objects"][0]["fill"] == "#00FF00"
+
+
+def test_draw_text_accepts_anchor_and_wrap(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+
+    result = run_cli(
+        "draw",
+        "text",
+        "--session",
+        str(session_path),
+        "--x",
+        "100",
+        "--y",
+        "20",
+        "--text",
+        "Wrap this label into multiple lines",
+        "--anchor",
+        "center",
+        "--max-width",
+        "80",
+        "--json",
+        env=env,
+    )
+
+    assert result.returncode == 0
+    scene = read_scene(session_path)
+    assert scene["objects"][0]["anchor"] == "center"
+    assert scene["objects"][0]["max_width"] == 80.0
 
 
 def test_edit_rect_by_label_updates_unique_object(tmp_path: Path) -> None:

@@ -6,8 +6,14 @@ import re
 from collections.abc import Mapping
 from pathlib import Path
 
+from linework.capabilities import (
+    DRAW_OPERATIONS,
+    EDIT_OPERATIONS,
+    stored_object_type_for_op,
+    unsupported_command_message,
+)
 from linework.core.errors import CommandValidationError, ObjectNotFoundError
-from linework.core.objects import build_object
+from linework.core.objects import ObjectDict, apply_edit, build_object, require_positive_number
 from linework.storage.ids import (
     format_batch_id,
     format_object_id,
@@ -19,25 +25,6 @@ from linework.storage.models import CommandRecord
 
 _BATCH_ID = re.compile(r"^batch_(\d{6})$")
 _OBJECT_ID = re.compile(r"^obj_(\d{6})$")
-
-_DRAW_COMMANDS = {
-    "draw.line",
-    "draw.rect",
-    "draw.ellipse",
-    "draw.polyline",
-    "draw.polygon",
-    "draw.text",
-    "draw.image",
-}
-_EDIT_COMMANDS = {
-    "edit.line",
-    "edit.rect",
-    "edit.ellipse",
-    "edit.polyline",
-    "edit.polygon",
-    "edit.text",
-    "edit.image",
-}
 
 
 def next_object_id(commands: list[CommandRecord]) -> str:
@@ -67,31 +54,25 @@ def next_batch_id(commands: list[CommandRecord]) -> str:
     return format_batch_id(max_index + 1)
 
 
-def _resolve_live_objects(commands: list[CommandRecord]) -> dict[str, dict[str, str | None]]:
+def _resolve_live_objects(
+    commands: list[CommandRecord], *, session_path: Path
+) -> dict[str, ObjectDict]:
     """Build a map of live objects from effective commands."""
-    from linework.core.scene import resolve_effective_commands
+    from linework.core.scene import apply_effective_command, resolve_effective_commands
 
     effective = resolve_effective_commands(commands)
-    live: dict[str, dict[str, str | None]] = {}
-    for cmd in effective:
-        if cmd.op.startswith("draw."):
-            obj_id = cmd.payload.get("id")
-            if isinstance(obj_id, str):
-                label = cmd.payload.get("label")
-                live[obj_id] = {
-                    "type": cmd.op.removeprefix("draw."),
-                    "label": label if isinstance(label, str) else None,
-                }
-        elif cmd.op.startswith("edit."):
-            obj_id = cmd.payload.get("id")
-            if isinstance(obj_id, str) and obj_id in live and "label" in cmd.payload:
-                label = cmd.payload.get("label")
-                live[obj_id]["label"] = label if isinstance(label, str) else None
-        elif cmd.op == "delete":
-            obj_id = cmd.payload.get("id")
-            if isinstance(obj_id, str):
-                live.pop(obj_id, None)
-    return live
+    objects: list[ObjectDict] = []
+    for command in effective:
+        objects = apply_effective_command(
+            objects=objects,
+            command=command,
+            session_path=session_path,
+        )
+    return {
+        object_id: object_data
+        for object_data in objects
+        if isinstance((object_id := object_data.get("id")), str)
+    }
 
 
 def normalize_command(
@@ -103,9 +84,9 @@ def normalize_command(
     batch_id: str | None = None,
 ) -> CommandRecord:
     """Normalize a command payload into a canonical command record."""
-    normalized_payload = dict(payload or {})
+    normalized_payload = _normalize_alias_payload(op=op, payload=dict(payload or {}))
 
-    if op in _DRAW_COMMANDS:
+    if op in DRAW_OPERATIONS:
         normalized_payload.setdefault("id", next_object_id(existing_commands))
         build_object(
             command=op,
@@ -113,17 +94,25 @@ def normalize_command(
             object_id=str(normalized_payload["id"]),
             session_path=session_path,
         )
-    elif op in _EDIT_COMMANDS:
+    elif op in EDIT_OPERATIONS:
         object_id = _resolve_target_object_id(
             normalized_payload=normalized_payload,
             existing_commands=existing_commands,
+            session_path=session_path,
             for_delete=False,
         )
-        _validate_target_object(existing_commands, object_id, op)
+        existing_object = _validate_target_object(
+            existing_commands,
+            object_id,
+            op,
+            session_path=session_path,
+        )
+        apply_edit(existing=existing_object, payload=normalized_payload, session_path=session_path)
     elif op == "delete":
         object_id = _resolve_target_object_id(
             normalized_payload=normalized_payload,
             existing_commands=existing_commands,
+            session_path=session_path,
             for_delete=True,
         )
         normalized_payload = {"id": object_id}
@@ -131,7 +120,7 @@ def normalize_command(
         if normalized_payload:
             raise CommandValidationError("undo does not accept a payload")
     else:
-        raise CommandValidationError(f"unsupported command: {op}")
+        raise CommandValidationError(unsupported_command_message(op))
 
     timestamp = iso_timestamp(utc_now())
     op_id = format_operation_id(len(existing_commands) + 1)
@@ -149,23 +138,28 @@ def _validate_target_object(
     existing_commands: list[CommandRecord],
     object_id: str,
     edit_op: str,
-) -> None:
+    *,
+    session_path: Path,
+) -> ObjectDict:
     """Validate that the target object exists and matches the edit command type."""
-    live = _resolve_live_objects(existing_commands)
-    if object_id not in live:
+    live = _resolve_live_objects(existing_commands, session_path=session_path)
+    existing = live.get(object_id)
+    if existing is None:
         raise ObjectNotFoundError(f"object not found: {object_id}")
-    expected_type = edit_op.removeprefix("edit.")
-    actual_type = str(live[object_id]["type"])
+    expected_type = stored_object_type_for_op(edit_op)
+    actual_type = str(existing["type"])
     if actual_type != expected_type:
         raise CommandValidationError(
             f"object {object_id} is type '{actual_type}', not compatible with '{edit_op}'"
         )
+    return dict(existing)
 
 
 def _resolve_target_object_id(
     *,
     normalized_payload: dict[str, object],
     existing_commands: list[CommandRecord],
+    session_path: Path,
     for_delete: bool,
 ) -> str:
     """Resolve a target object by id or unique live label."""
@@ -185,6 +179,7 @@ def _resolve_target_object_id(
 
     resolved_id = _resolve_unique_object_id_by_label(
         existing_commands=existing_commands,
+        session_path=session_path,
         label=selector_label,
     )
     normalized_payload["id"] = resolved_id
@@ -195,13 +190,43 @@ def _resolve_target_object_id(
 def _resolve_unique_object_id_by_label(
     *,
     existing_commands: list[CommandRecord],
+    session_path: Path,
     label: str,
 ) -> str:
     """Resolve one live object id from a unique label."""
-    live = _resolve_live_objects(existing_commands)
-    matches = [object_id for object_id, info in live.items() if info.get("label") == label]
+    live = _resolve_live_objects(existing_commands, session_path=session_path)
+    matches = [
+        object_id for object_id, object_data in live.items() if object_data.get("label") == label
+    ]
     if not matches:
         raise ObjectNotFoundError(f"object not found for label: {label}")
     if len(matches) > 1:
         raise CommandValidationError(f"label is ambiguous: {label}")
     return matches[0]
+
+
+def _normalize_alias_payload(op: str, payload: dict[str, object]) -> dict[str, object]:
+    """Normalize convenience alias payloads before validation and storage."""
+    if op not in {"draw.circle", "edit.circle"}:
+        return payload
+
+    if "radius" in payload:
+        radius = require_positive_number(payload.get("radius"), field="radius")
+        normalized = dict(payload)
+        normalized.pop("radius", None)
+        normalized["width"] = radius * 2.0
+        normalized["height"] = radius * 2.0
+        return normalized
+
+    width = payload.get("width")
+    height = payload.get("height")
+    if width is None and height is None:
+        if op == "draw.circle":
+            raise CommandValidationError("radius must be provided for draw.circle")
+        return payload
+
+    normalized_width = require_positive_number(width, field="width")
+    normalized_height = require_positive_number(height, field="height")
+    if normalized_width != normalized_height:
+        raise CommandValidationError("circle width and height must match")
+    return payload

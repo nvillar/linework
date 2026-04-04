@@ -5,18 +5,22 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import tempfile
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from linework.bootstrap import BOOTSTRAP_TEXT
+from linework.capabilities import OTHER_OPERATIONS, operations_for_namespace, schema_manifest
 from linework.constants import (
+    ARROWHEAD_MODES,
     DEFAULT_CANVAS_BACKGROUND,
     DEFAULT_CANVAS_HEIGHT,
     DEFAULT_CANVAS_WIDTH,
+    TEXT_ANCHORS,
 )
 from linework.core.errors import SceneEngineError
 from linework.storage.lock import SessionLockedError
-from linework.storage.models import CreatedSession, MutationResult
+from linework.storage.models import BatchResult, CreatedSession, MutationResult
 from linework.storage.session import (
     SessionError,
     apply_batch,
@@ -38,6 +42,7 @@ class _HelpFormatter(
 
 _TOP_LEVEL_EPILOG = """\
 Golden path:
+  linework schema --json
   linework new --name idea-board --json
   linework run --session PATH --json < ops.jsonl
   linework inspect --session PATH --json
@@ -57,11 +62,23 @@ _RUN_EPILOG = """\
 Examples:
   linework run --session PATH --json < ops.jsonl
   linework run --session PATH --file ops.jsonl
+  linework run --file ops.jsonl --out out.png
 
 JSONL input:
   {"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100}}
+  {"op":"draw.arrow","payload":{"x1":20,"y1":40,"x2":160,"y2":40,"arrowhead":"both","arrow_size":18}}
+  {"op":"draw.circle","payload":{"x":40,"y":40,"radius":30}}
   {"op":"draw.polygon","payload":{"points":[[220,180],[300,120],[360,210]],"fill":"#FF6666"}}
   {"op":"delete","payload":{"label":"note-box"}}
+
+Provide --out without --session to use a temporary throwaway session that is
+exported and then deleted.
+"""
+
+_SCHEMA_EPILOG = """\
+Examples:
+  linework schema
+  linework schema --json
 """
 
 _INSPECT_EPILOG = """\
@@ -74,12 +91,16 @@ Use inspect before edit/delete to discover stable object IDs and labels.
 
 _DRAW_EPILOG = """\
 Examples:
+  linework draw arrow --session PATH --x1 20 --y1 40 --x2 180 --y2 40
+    --arrowhead both --arrow-size 18
   linework draw rect --session PATH --x 50 --y 50 --width 200 --height 100 --fill #E8E8E8
+  linework draw circle --session PATH --x 240 --y 60 --radius 30 --fill #FDE68A
   linework draw polygon --session PATH --point 220,180 --point 300,120 --point 360,210
 """
 
 _EDIT_EPILOG = """\
 Examples:
+  linework edit arrow --session PATH --id obj_000001 --arrowhead both --arrow-size 18
   linework edit rect --session PATH --id obj_000001 --fill #CCE5FF
   linework edit rect --session PATH --label note-box --fill #CCE5FF
 
@@ -107,8 +128,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="linework",
         description=(
-            "Agent-first CLI sketch tool. Use `linework run` for JSONL batches, "
-            "`inspect` to read the scene back, and `watch` for a read-only window."
+            "Agent-first CLI sketch tool. Use `linework schema --json` to discover "
+            "supported ops, `linework run` for JSONL batches, `inspect` to read the "
+            "scene back, and `watch` for a read-only window."
         ),
         epilog=_TOP_LEVEL_EPILOG,
         formatter_class=_HelpFormatter,
@@ -119,6 +141,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print the installed linework version and exit.",
     )
     subparsers = parser.add_subparsers(dest="command")
+
+    # --- schema ---
+    schema_parser = subparsers.add_parser(
+        "schema",
+        help="Print supported operations and payload schema.",
+        description=(
+            "Print a human-readable capability summary or a machine-readable JSON "
+            "manifest describing supported operations, payload fields, and defaults."
+        ),
+        epilog=_SCHEMA_EPILOG,
+        formatter_class=_HelpFormatter,
+    )
+    schema_parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
     # --- new ---
     new_parser = subparsers.add_parser(
@@ -163,14 +198,22 @@ def build_parser() -> argparse.ArgumentParser:
         "run",
         help="Apply JSONL operations (primary interface).",
         description=(
-            "Apply JSONL operations to an existing session. Operations run in order, "
-            "stop on first failure, and render once at the end."
+            "Apply JSONL operations to an existing session, or export a one-shot "
+            "throwaway batch with --out. Operations run in order, stop on first "
+            "failure, and render once at the end."
         ),
         epilog=_RUN_EPILOG,
         formatter_class=_HelpFormatter,
     )
-    run_parser.add_argument("--session", required=True, help="Session directory path.")
+    run_parser.add_argument("--session", help="Session directory path.")
     run_parser.add_argument("--file", help="Read JSONL from a file instead of stdin.")
+    run_parser.add_argument(
+        "--out",
+        help=(
+            "Optional PNG export path. When used without --session, linework creates "
+            "a temporary session, exports the result, and deletes the session."
+        ),
+    )
     run_parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
     # --- inspect ---
@@ -225,8 +268,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     draw_subparsers = draw_parser.add_subparsers(dest="draw_type", required=True)
     _add_draw_line_parser(draw_subparsers)
+    _add_draw_arrow_parser(draw_subparsers)
     _add_draw_rect_like_parser(draw_subparsers, name="rect")
     _add_draw_rect_like_parser(draw_subparsers, name="ellipse")
+    _add_draw_circle_parser(draw_subparsers)
     _add_draw_polyline_parser(draw_subparsers)
     _add_draw_polygon_parser(draw_subparsers)
     _add_draw_text_parser(draw_subparsers)
@@ -244,8 +289,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     edit_subparsers = edit_parser.add_subparsers(dest="edit_type", required=True)
     _add_edit_line_parser(edit_subparsers)
+    _add_edit_arrow_parser(edit_subparsers)
     _add_edit_rect_like_parser(edit_subparsers, name="rect")
     _add_edit_rect_like_parser(edit_subparsers, name="ellipse")
+    _add_edit_circle_parser(edit_subparsers)
     _add_edit_polyline_parser(edit_subparsers)
     _add_edit_polygon_parser(edit_subparsers)
     _add_edit_text_parser(edit_subparsers)
@@ -297,6 +344,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(__version__)
         return 0
 
+    if args.command == "schema":
+        return cmd_schema(args)
     if args.command == "new":
         return cmd_new(args)
     if args.command == "run":
@@ -397,6 +446,13 @@ def _add_line_geometry(parser: argparse.ArgumentParser, *, required: bool) -> No
     parser.add_argument("--y2", type=float, required=required, help="End y coordinate.")
 
 
+def _add_circle_geometry(parser: argparse.ArgumentParser, *, required: bool) -> None:
+    """Add circle geometry arguments."""
+    parser.add_argument("--x", type=float, required=required, help="Top-left x coordinate.")
+    parser.add_argument("--y", type=float, required=required, help="Top-left y coordinate.")
+    parser.add_argument("--radius", type=float, required=required, help="Radius in pixels.")
+
+
 def _add_rect_like_geometry(parser: argparse.ArgumentParser, *, required: bool) -> None:
     """Add rectangle or ellipse geometry arguments."""
     parser.add_argument("--x", type=float, required=required, help="Top-left x coordinate.")
@@ -407,9 +463,43 @@ def _add_rect_like_geometry(parser: argparse.ArgumentParser, *, required: bool) 
 
 def _add_text_geometry(parser: argparse.ArgumentParser, *, required: bool) -> None:
     """Add text geometry arguments."""
-    parser.add_argument("--x", type=float, required=required, help="Text anchor x coordinate.")
-    parser.add_argument("--y", type=float, required=required, help="Text anchor y coordinate.")
+    parser.add_argument("--x", type=float, required=required, help="Text x coordinate.")
+    parser.add_argument("--y", type=float, required=required, help="Text y coordinate.")
     parser.add_argument("--text", required=required, help="Text content.")
+
+
+def _add_arrowhead_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the optional arrowhead mode flag."""
+    parser.add_argument(
+        "--arrowhead",
+        choices=ARROWHEAD_MODES,
+        help="Arrowhead placement.",
+    )
+
+
+def _add_arrow_size_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the optional arrowhead size flag."""
+    parser.add_argument(
+        "--arrow-size",
+        type=float,
+        dest="arrow_size",
+        help="Arrowhead size in pixels.",
+    )
+
+
+def _add_text_layout_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add optional text alignment and wrapping flags."""
+    parser.add_argument(
+        "--anchor",
+        choices=TEXT_ANCHORS,
+        help="Horizontal anchor for the text position.",
+    )
+    parser.add_argument(
+        "--max-width",
+        type=float,
+        dest="max_width",
+        help="Wrap text to this maximum rendered width in pixels.",
+    )
 
 
 def _add_polyline_points(parser: argparse.ArgumentParser, *, required: bool) -> None:
@@ -460,6 +550,20 @@ def _add_draw_line_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     _add_json_argument(parser)
 
 
+def _add_draw_arrow_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Add the ``linework draw arrow`` parser."""
+    parser = subparsers.add_parser("arrow", help="Draw an arrow.", formatter_class=_HelpFormatter)
+    _add_session_argument(parser)
+    _add_line_geometry(parser, required=True)
+    _add_label_argument(parser)
+    _add_visible_argument(parser)
+    _add_stroke_argument(parser)
+    _add_stroke_width_argument(parser)
+    _add_arrowhead_argument(parser)
+    _add_arrow_size_argument(parser)
+    _add_json_argument(parser)
+
+
 def _add_draw_rect_like_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser], *, name: str
 ) -> None:
@@ -472,6 +576,21 @@ def _add_draw_rect_like_parser(
     )
     _add_session_argument(parser)
     _add_rect_like_geometry(parser, required=True)
+    _add_label_argument(parser)
+    _add_visible_argument(parser)
+    _add_stroke_argument(parser)
+    _add_fill_argument(parser)
+    _add_stroke_width_argument(parser)
+    _add_json_argument(parser)
+
+
+def _add_draw_circle_parser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Add the ``linework draw circle`` parser."""
+    parser = subparsers.add_parser("circle", help="Draw a circle.", formatter_class=_HelpFormatter)
+    _add_session_argument(parser)
+    _add_circle_geometry(parser, required=True)
     _add_label_argument(parser)
     _add_visible_argument(parser)
     _add_stroke_argument(parser)
@@ -527,6 +646,7 @@ def _add_draw_text_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     _add_session_argument(parser)
     _add_text_geometry(parser, required=True)
     parser.add_argument("--size", type=float, help="Text size in pixels.")
+    _add_text_layout_arguments(parser)
     _add_label_argument(parser)
     _add_visible_argument(parser)
     _add_fill_argument(parser)
@@ -560,6 +680,17 @@ def _add_edit_line_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     _add_stroke_width_argument(parser)
 
 
+def _add_edit_arrow_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
+    """Add the ``linework edit arrow`` parser."""
+    parser = subparsers.add_parser("arrow", help="Edit an arrow.", formatter_class=_HelpFormatter)
+    _add_edit_common_arguments(parser)
+    _add_line_geometry(parser, required=False)
+    _add_stroke_argument(parser)
+    _add_stroke_width_argument(parser)
+    _add_arrowhead_argument(parser)
+    _add_arrow_size_argument(parser)
+
+
 def _add_edit_rect_like_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser], *, name: str
 ) -> None:
@@ -572,6 +703,18 @@ def _add_edit_rect_like_parser(
     )
     _add_edit_common_arguments(parser)
     _add_rect_like_geometry(parser, required=False)
+    _add_stroke_argument(parser)
+    _add_fill_argument(parser)
+    _add_stroke_width_argument(parser)
+
+
+def _add_edit_circle_parser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Add the ``linework edit circle`` parser."""
+    parser = subparsers.add_parser("circle", help="Edit a circle.", formatter_class=_HelpFormatter)
+    _add_edit_common_arguments(parser)
+    _add_circle_geometry(parser, required=False)
     _add_stroke_argument(parser)
     _add_fill_argument(parser)
     _add_stroke_width_argument(parser)
@@ -618,6 +761,7 @@ def _add_edit_text_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     _add_edit_common_arguments(parser)
     _add_text_geometry(parser, required=False)
     parser.add_argument("--size", type=float, help="Text size in pixels.")
+    _add_text_layout_arguments(parser)
     _add_fill_argument(parser)
 
 
@@ -652,6 +796,20 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
         _include_optional_values(payload, args, "label", "visible", "stroke", "stroke_width")
         return payload
 
+    if draw_type == "arrow":
+        payload = {"x1": args.x1, "y1": args.y1, "x2": args.x2, "y2": args.y2}
+        _include_optional_values(
+            payload,
+            args,
+            "label",
+            "visible",
+            "stroke",
+            "stroke_width",
+            "arrowhead",
+            "arrow_size",
+        )
+        return payload
+
     if draw_type in {"rect", "ellipse"}:
         payload = {
             "x": args.x,
@@ -659,6 +817,19 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
             "width": args.width,
             "height": args.height,
         }
+        _include_optional_values(
+            payload,
+            args,
+            "label",
+            "visible",
+            "stroke",
+            "fill",
+            "stroke_width",
+        )
+        return payload
+
+    if draw_type == "circle":
+        payload = {"x": args.x, "y": args.y, "radius": args.radius}
         _include_optional_values(
             payload,
             args,
@@ -690,7 +861,16 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
 
     if draw_type == "text":
         payload = {"x": args.x, "y": args.y, "text": args.text}
-        _include_optional_values(payload, args, "size", "label", "visible", "fill")
+        _include_optional_values(
+            payload,
+            args,
+            "size",
+            "anchor",
+            "max_width",
+            "label",
+            "visible",
+            "fill",
+        )
         return payload
 
     if draw_type == "image":
@@ -725,6 +905,21 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             "stroke",
             "stroke_width",
         )
+    elif edit_type == "arrow":
+        _include_optional_values(
+            payload,
+            args,
+            "x1",
+            "y1",
+            "x2",
+            "y2",
+            "label",
+            "visible",
+            "stroke",
+            "stroke_width",
+            "arrowhead",
+            "arrow_size",
+        )
     elif edit_type in {"rect", "ellipse"}:
         _include_optional_values(
             payload,
@@ -733,6 +928,19 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             "y",
             "width",
             "height",
+            "label",
+            "visible",
+            "stroke",
+            "fill",
+            "stroke_width",
+        )
+    elif edit_type == "circle":
+        _include_optional_values(
+            payload,
+            args,
+            "x",
+            "y",
+            "radius",
             "label",
             "visible",
             "stroke",
@@ -770,6 +978,8 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             "y",
             "text",
             "size",
+            "anchor",
+            "max_width",
             "label",
             "visible",
             "fill",
@@ -820,6 +1030,27 @@ def _single_operation_payload(result: MutationResult) -> dict[str, object]:
     }
 
 
+def _batch_output_payload(
+    result: BatchResult,
+    *,
+    exported_path: str | None = None,
+    temporary_session: bool = False,
+) -> dict[str, object]:
+    """Serialize a batch result with optional export metadata."""
+    payload: dict[str, object] = {
+        "applied": result.applied,
+        "failed": result.failed,
+        "results": result.results,
+        "scene_object_count": result.scene_object_count,
+    }
+    if not temporary_session:
+        payload["session_path"] = result.session_path
+        payload["latest_render"] = result.latest_render
+    if exported_path is not None:
+        payload["exported_path"] = exported_path
+    return payload
+
+
 def _emit_created_session_result(result: CreatedSession, *, use_json: bool) -> None:
     """Emit output for a newly created session."""
     if use_json:
@@ -830,6 +1061,34 @@ def _emit_created_session_result(result: CreatedSession, *, use_json: bool) -> N
     print(f"Session path: {result.session_path}")
     print(f"Canvas: {result.canvas.width}x{result.canvas.height}")
     print(f"Latest render: {result.latest_render}")
+
+
+def _emit_batch_result(
+    *,
+    result: BatchResult,
+    use_json: bool,
+    exported_path: str | None = None,
+    temporary_session: bool = False,
+) -> int:
+    """Emit output for a batch result with optional export metadata."""
+    payload = _batch_output_payload(
+        result,
+        exported_path=exported_path,
+        temporary_session=temporary_session,
+    )
+    if use_json:
+        print(json.dumps(payload, indent=2))
+        return 1 if result.failed is not None else 0
+
+    print(f"Applied {result.applied} operation(s)")
+    if result.failed:
+        print(f"Failed: {result.failed['op']}: {result.failed['error']}")
+    print(f"Objects: {result.scene_object_count}")
+    if not temporary_session:
+        print(f"Latest render: {result.latest_render}")
+    if exported_path is not None:
+        print(f"Exported: {exported_path}")
+    return 1 if result.failed is not None else 0
 
 
 def _apply_single_operation(
@@ -889,6 +1148,32 @@ def _undo_summary(result: MutationResult) -> str:
 
 
 # ---------------------------------------------------------------------------
+# linework schema
+# ---------------------------------------------------------------------------
+
+
+def cmd_schema(args: argparse.Namespace) -> int:
+    """Handle ``linework schema``."""
+    manifest = schema_manifest()
+    if args.json:
+        print(json.dumps(manifest, indent=2))
+        return 0
+
+    canvas_defaults = manifest["canvas_defaults"]
+    assert isinstance(canvas_defaults, dict)
+    print(
+        "Canvas defaults: "
+        f"{canvas_defaults['width']}x{canvas_defaults['height']} "
+        f"background {canvas_defaults['background']}"
+    )
+    print(f"Draw ops: {', '.join(operations_for_namespace('draw'))}")
+    print(f"Edit ops: {', '.join(operations_for_namespace('edit'))}")
+    print(f"Other ops: {', '.join(sorted(OTHER_OPERATIONS))}")
+    print("Use `linework schema --json` for machine-readable payload fields and defaults.")
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # linework new
 # ---------------------------------------------------------------------------
 
@@ -939,21 +1224,38 @@ def cmd_run(args: argparse.Namespace) -> int:
     except (OSError, ValueError) as exc:
         return _error(str(exc), use_json=args.json)
 
+    if args.session is None and args.out is None:
+        return _error("either --session or --out must be provided", use_json=args.json)
+
     try:
-        result = apply_batch(args.session, operations=operations)
+        if args.session is not None:
+            result = apply_batch(args.session, operations=operations)
+            exported_path = export_session(args.session, out=args.out) if args.out else None
+            return _emit_batch_result(
+                result=result,
+                use_json=args.json,
+                exported_path=exported_path,
+            )
+
+        with tempfile.TemporaryDirectory(prefix="linework-run-") as temp_dir:
+            temp_session = Path(temp_dir) / "session"
+            created = create_session(
+                session=str(temp_session),
+                name="one-shot",
+                width=DEFAULT_CANVAS_WIDTH,
+                height=DEFAULT_CANVAS_HEIGHT,
+                background=DEFAULT_CANVAS_BACKGROUND,
+            )
+            result = apply_batch(created.session_path, operations=operations)
+            exported_path = export_session(created.session_path, out=args.out)
+            return _emit_batch_result(
+                result=result,
+                use_json=args.json,
+                exported_path=exported_path,
+                temporary_session=True,
+            )
     except (OSError, SessionError, SessionLockedError, SceneEngineError) as exc:
         return _error(str(exc), use_json=args.json)
-
-    if args.json:
-        print(json.dumps(result.to_dict(), indent=2))
-    else:
-        print(f"Applied {result.applied} operation(s)")
-        if result.failed:
-            print(f"Failed: {result.failed['op']}: {result.failed['error']}")
-        print(f"Objects: {result.scene_object_count}")
-        print(f"Latest render: {result.latest_render}")
-
-    return 1 if result.failed is not None else 0
 
 
 def _read_jsonl(file_path: str | None) -> list[dict[str, object]]:
@@ -1021,12 +1323,23 @@ def _format_geometry(obj: dict[str, object]) -> str:
     obj_type = str(obj.get("type", ""))
     if obj_type == "line":
         return f"({obj.get('x1')},{obj.get('y1')})→({obj.get('x2')},{obj.get('y2')})"
+    if obj_type == "arrow":
+        arrowhead = str(obj.get("arrowhead", "end"))
+        arrow_size = obj.get("arrow_size")
+        size_text = f", size={arrow_size}" if isinstance(arrow_size, int | float) else ""
+        return (
+            f"({obj.get('x1')},{obj.get('y1')})→({obj.get('x2')},{obj.get('y2')}) "
+            f"[{arrowhead}{size_text}]"
+        )
     if obj_type in {"rect", "ellipse", "image"}:
         return f"({obj.get('x')},{obj.get('y')}) {obj.get('width')}×{obj.get('height')}"
     if obj_type == "text":
         text = str(obj.get("text", ""))
         truncated = text[:20] + "…" if len(text) > 20 else text
-        return f'({obj.get("x")},{obj.get("y")}) "{truncated}"'
+        anchor = str(obj.get("anchor", "left"))
+        max_width = obj.get("max_width")
+        width_text = f" ≤{max_width}" if isinstance(max_width, int | float) else ""
+        return f'({obj.get("x")},{obj.get("y")}) "{truncated}" [{anchor}{width_text}]'
     if obj_type == "polyline":
         points = obj.get("points")
         count = len(points) if isinstance(points, list) else 0

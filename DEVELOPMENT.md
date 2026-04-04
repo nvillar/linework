@@ -105,36 +105,51 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - expanded JSON error, batch edge case, and CLI validation coverage
 - refreshed bootstrap text, subcommand help, and polygon regression fixtures
 
+#### Milestone 10: Agent UX improvements (complete)
+
+- smarter unsupported-command errors with suggestions and valid-op lists
+- new `linework schema --json` capability manifest
+- `draw.circle` / `edit.circle` convenience aliases stored as ellipses
+- `linework run --out` one-shot temporary-session export flow
+- `arrow` primitive with configurable `arrowhead` and optional `arrow_size`
+- text `anchor` and `max_width` support
+- new agent UX regression fixture plus expanded CLI/render coverage
+
 ### Current implementation status
 
-Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9.
+Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10.
 
 Current user-facing command surface:
 
 - `linework` (no-arg bootstrap)
 - `linework --version`
+- `linework schema`
 - `linework new`
 - `linework run` (JSONL batch — primary agent interface)
 - `linework inspect`
 - `linework export`
 - `linework watch`
-- `linework draw line|rect|ellipse|polyline|polygon|text|image`
-- `linework edit line|rect|ellipse|polyline|polygon|text|image`
+- `linework draw line|arrow|rect|ellipse|circle|polyline|polygon|text|image`
+- `linework edit line|arrow|rect|ellipse|circle|polyline|polygon|text|image`
 - `linework delete`
 - `linework undo`
 
 Internal engine capabilities:
 
-- append-only mutation engine for `draw.line`, `draw.rect`, `draw.ellipse`, `draw.polyline`, `draw.polygon`, `draw.text`, `draw.image`, `edit.*`, `delete`, `undo`
+- append-only mutation engine for `draw.line`, `draw.arrow`, `draw.rect`, `draw.ellipse`, `draw.circle`, `draw.polyline`, `draw.polygon`, `draw.text`, `draw.image`, `edit.*`, `delete`, `undo`
+- machine-readable schema manifest for agents and external tooling
 - JSONL batch execution with single-render-at-end semantics
 - batch-aware undo grouping for `linework run`
+- one-shot batch export via `linework run --out`
 - scene replay from command history
 - PNG rendering for all supported primitives
+- arrow rendering with configurable arrowhead placement and size
+- text anchor and width-based wrapping support
 - label-based selection for edit/delete with disambiguation on collisions
 - bundled Noto Sans default font for deterministic text rendering
 - session-local asset import/copy for image convenience commands
 - read-only watcher window with lazy `tkinter` loading and polling refresh
-- fixture-based regression harness for blank, shapes, polygon, text, image, undo/edit/delete, and batch cases
+- fixture-based regression harness for blank, shapes, polygon, text, image, agent UX, undo/edit/delete, and batch cases
 - automated packaging/build validation plus isolated `uv tool install` validation
 - structured `--json` output and `--json` error output for all mutation commands (`linework watch` is display-only and does not use `--json`)
 - richer bootstrap text and subcommand help with an inspect → edit/delete golden path
@@ -144,8 +159,13 @@ Implementation notes:
 - text rendering uses a bundled Noto Sans font shipped in `src/linework/assets/`
 - image rendering and export now validate session-local assets; image source replacement remains out of scope
 - `linework new` now defaults to an `800x800` canvas
+- `linework schema --json` exposes supported ops, field schemas, selectors, enums, defaults, and canvas defaults
+- `draw.circle` / `edit.circle` accept `x`, `y`, and `radius`, but the stored scene object type remains `ellipse`
+- `linework run --out` can export either an existing session or a temporary throwaway batch result
+- `draw.arrow` / `edit.arrow` support `arrowhead` (`end`, `start`, `both`, `none`) and optional pixel-sized `arrow_size`
+- text objects now support horizontal `anchor` plus width-based wrapping via `max_width`
 - `new --watch --json` keeps creating the session, but returns an error-only JSON envelope on watcher startup failure
 - `linework edit` can select by label when `--id` is omitted; use `--id` when relabeling
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 
-Next milestone: **TBD.**
+Next milestone: **TBD.** Deferred future directions are canvas resize / fit-to-contents, grouping, auto-layout, higher-level composites, and themes / reusable styles.

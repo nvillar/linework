@@ -15,6 +15,7 @@
       "y": 18.0,
       "text": "Linework",
       "size": 24.0,
+      "anchor": "left",
       "fill": "#111111"
     },
     {
@@ -25,6 +26,7 @@
       "y": 52.0,
       "text": "deterministic",
       "size": 18.0,
+      "anchor": "left",
       "fill": "#0055AA"
     }
   ]

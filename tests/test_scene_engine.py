@@ -31,6 +31,12 @@ def create_test_session(tmp_path: Path) -> Path:
     return session_path
 
 
+def nonwhite_bbox(image: Image.Image) -> tuple[int, int, int, int] | None:
+    """Return the bounding box of non-white pixels."""
+    blank = Image.new("RGB", image.size, (255, 255, 255))
+    return ImageChops.difference(image.convert("RGB"), blank).getbbox()
+
+
 def test_draw_rect_updates_scene_commands_and_render(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -207,6 +213,65 @@ def test_draw_polygon_renders_filled_shape(tmp_path: Path, monkeypatch: pytest.M
         assert rendered.getpixel((95, 60)) == (255, 102, 204, 255)
 
 
+def test_draw_circle_stores_ellipse_geometry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import config
+
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
+    session_path = create_test_session(tmp_path)
+
+    result = apply_mutation(
+        session_path,
+        op="draw.circle",
+        payload={"x": 40, "y": 30, "radius": 20, "fill": "#FF0000"},
+    )
+
+    assert result.op == "draw.circle"
+    scene = read_scene_snapshot(session_path)
+    assert scene.objects[0]["type"] == "ellipse"
+    assert scene.objects[0]["x"] == 40.0
+    assert scene.objects[0]["width"] == 40.0
+    assert scene.objects[0]["height"] == 40.0
+
+    with Image.open(session_path / "render" / "latest.png") as rendered:
+        assert rendered.getpixel((60, 50)) == (255, 0, 0, 255)
+
+
+def test_draw_arrow_renders_with_requested_head_size(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import config
+
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
+    session_path = create_test_session(tmp_path)
+
+    apply_mutation(
+        session_path,
+        op="draw.arrow",
+        payload={
+            "x1": 20,
+            "y1": 80,
+            "x2": 160,
+            "y2": 80,
+            "stroke": "#0000FF",
+            "stroke_width": 4,
+            "arrowhead": "both",
+            "arrow_size": 18,
+        },
+    )
+
+    scene = read_scene_snapshot(session_path)
+    assert scene.objects[0]["type"] == "arrow"
+    assert scene.objects[0]["arrow_size"] == 18.0
+
+    with Image.open(session_path / "render" / "latest.png") as rendered:
+        assert rendered.getpixel((90, 80)) == (0, 0, 255, 255)
+        assert rendered.getpixel((20, 80)) == (0, 0, 255, 255)
+        assert rendered.getpixel((160, 80)) == (0, 0, 255, 255)
+        assert rendered.getpixel((148, 84)) == (0, 0, 255, 255)
+
+
 def test_edit_and_delete_support_unique_label_selection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -360,6 +425,60 @@ def test_draw_image_normalizes_stored_asset_path(
 
     scene = read_scene_snapshot(session_path)
     assert scene.objects[0]["asset_path"] == "assets/sample.png"
+
+
+def test_text_anchor_positions_text_around_x_coordinate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import config
+
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
+    session_path = create_test_session(tmp_path)
+
+    apply_mutation(
+        session_path,
+        op="draw.text",
+        payload={"x": 100, "y": 20, "text": "Center", "size": 24, "anchor": "center"},
+    )
+
+    scene = read_scene_snapshot(session_path)
+    assert scene.objects[0]["anchor"] == "center"
+
+    with Image.open(session_path / "render" / "latest.png") as rendered:
+        bbox = nonwhite_bbox(rendered)
+        assert bbox is not None
+        center_x = (bbox[0] + bbox[2]) / 2.0
+        assert abs(center_x - 100.0) <= 4.0
+
+
+def test_text_max_width_wraps_over_multiple_lines(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import config
+
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
+    session_path = create_test_session(tmp_path)
+
+    apply_mutation(
+        session_path,
+        op="draw.text",
+        payload={
+            "x": 20,
+            "y": 20,
+            "text": "wrap this text into multiple rendered lines",
+            "size": 20,
+            "max_width": 80,
+        },
+    )
+
+    scene = read_scene_snapshot(session_path)
+    assert scene.objects[0]["max_width"] == 80.0
+
+    with Image.open(session_path / "render" / "latest.png") as rendered:
+        bbox = nonwhite_bbox(rendered)
+        assert bbox is not None
+        assert bbox[2] - bbox[0] <= 90
+        assert bbox[3] - bbox[1] >= 35
 
 
 def test_commands_jsonl_is_valid_jsonl_after_mutations(

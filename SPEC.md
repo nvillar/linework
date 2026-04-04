@@ -79,6 +79,7 @@ The bundled font becomes part of the rendering contract for the MVP.
 - Explicit session paths
 - Rich no-argument bootstrap output
 - Standard help system
+- Machine-readable capability discovery via `linework schema --json`
 - Human-readable default output
 - `--json` machine-readable output with structured errors
 - Single-canvas sessions
@@ -89,18 +90,22 @@ The bundled font becomes part of the rendering contract for the MVP.
 - PNG export
 - Draw primitives:
   - line
+  - arrow
   - rectangle
   - ellipse
+  - circle convenience alias
   - polyline
   - polygon
   - text
   - image placement
+- Text anchor and wrapping controls
 - Object mutation by stable ID or unique live label
 - Object labels as metadata
 - Object visibility
 - Delete
 - Whole-action undo
 - JSONL batch mode as the primary agent interface
+- One-shot batch export via `linework run --out`
 - Read-only watcher window
 - Session portability
 - Single-writer locking
@@ -113,17 +118,25 @@ The bundled font becomes part of the rendering contract for the MVP.
 - Rich brushes
 - Bucket fill tool
 - Eraser tool
-- Arrowheads or connector semantics
 - Layers
 - Grouping
 - Rich text
-- Text wrapping and alignment controls
 - Z-order editing commands
 - Multi-canvas or multi-page sessions
 - Interactive prompts
 - In-window editing
 - Dedicated `replay` command
 - Dedicated `history` command
+
+### 4.3 Future directions
+
+Deferred ideas that remain explicitly out of scope for the current release:
+
+- canvas resize / fit-to-contents
+- grouping / hierarchical edits
+- auto-layout helpers
+- higher-level composite objects
+- themes / reusable styles
 
 ## 5. Architecture Overview
 
@@ -403,6 +416,7 @@ The MVP CLI has two tiers of commands:
 
 - `linework` — bootstrap guide
 - `linework --version` — print the installed version
+- `linework schema` — print supported operations and payload schema
 - `linework new` — create a session
 - `linework run` — batch operations via JSONL (primary mutation interface)
 - `linework inspect` — read current session state
@@ -427,15 +441,39 @@ Invoking `linework` with no arguments must print a rich bootstrap guide and exit
 The bootstrap output must explain:
 
 - what `linework` is
+- how to discover supported operations with `linework schema --json`
 - the session model
 - the JSONL batch workflow as the primary interface
 - the default canvas size and background
+- the one-shot `linework run --out` workflow for throwaway images
 - the inspect → edit/delete workflow for discovering IDs and labels
 - the core commands
 - an end-to-end agent example from session creation through JSONL batch to rendered PNG
 - how to discover more help
 
-### 9.2 `linework new`
+### 9.2 `linework schema`
+
+Read-only capability discovery for humans and agents.
+
+Behavior:
+
+- requires no session
+- default output prints canvas defaults and the supported draw/edit/mutation ops
+- `--json` prints a machine-readable manifest
+
+The JSON manifest must include:
+
+- canvas defaults
+- every supported operation
+- required and optional payload fields
+- selector rules for edit/delete operations
+- enum values and defaults where applicable
+
+Flags:
+
+- `--json`
+
+### 9.3 `linework new`
 
 Creates a new session.
 
@@ -462,26 +500,29 @@ Flags:
 - `--watch`
 - `--json`
 
-### 9.3 `linework run`
+### 9.4 `linework run`
 
-The primary mutation interface. Applies a batch of JSONL operations to an existing session.
+The primary mutation interface. Applies a batch of JSONL operations to an existing session, or exports a one-shot batch result with `--out`.
 
 Behavior:
 
-- requires `--session PATH`
+- requires `--session PATH` or `--out PATH`
 - reads JSONL from stdin by default
 - supports `--file PATH` to read from a file
+- supports `--out PATH` to export the rendered result after the batch
 - applies operations sequentially
 - stops on first failure
 - prior successful operations remain committed
 - renders `render/latest.png` once after the last successful operation in the batch
 - a later `undo` reverses the successful portion of that batch as one action
+- when `--session` is omitted and `--out` is provided, `linework` must create a temporary default session, apply the batch, export the PNG, and then delete that temporary session
 
 Each input line must be a JSON object with `op` and `payload` fields:
 
 ```json
 {"op":"draw.rect","payload":{"x":80,"y":120,"width":300,"height":180,"fill":"#EEEEEE","label":"api-box"}}
-{"op":"draw.text","payload":{"x":100,"y":160,"text":"API flow","size":28,"fill":"#000000"}}
+{"op":"draw.arrow","payload":{"x1":400,"y1":210,"x2":620,"y2":210,"stroke":"#333333","stroke_width":3,"arrowhead":"end","arrow_size":18}}
+{"op":"draw.text","payload":{"x":100,"y":160,"text":"API flow","size":28,"anchor":"center","max_width":220,"fill":"#000000"}}
 ```
 
 Object IDs may be omitted from draw operations; `linework` will generate sequential IDs and include them in the results.
@@ -490,6 +531,7 @@ Flags:
 
 - `--session PATH`
 - `--file PATH`
+- `--out PATH`
 - `--json`
 
 #### `linework run --json` output
@@ -510,6 +552,16 @@ On success (all operations applied):
 }
 ```
 
+When `--out` is provided, the result must additionally include:
+
+```json
+{"exported_path": "/path/to/output.png"}
+```
+
+When `linework run` is used in temporary one-shot mode (`--out` without
+`--session`), the JSON payload must omit `session_path` and `latest_render`
+because the temporary session is deleted after export.
+
 On partial failure (some operations applied, then one failed):
 
 ```json
@@ -527,7 +579,7 @@ On partial failure (some operations applied, then one failed):
 
 The `results` array always contains one entry per successfully applied operation, in order. Each entry includes the assigned `op_id` and `object_id` (when applicable). This allows callers that omit IDs to discover the generated IDs.
 
-### 9.4 `linework inspect`
+### 9.5 `linework inspect`
 
 Shows the current session state. This is the agent's "read" interface for understanding what is on the canvas.
 
@@ -570,7 +622,7 @@ Flags:
 - `--session PATH`
 - `--json`
 
-### 9.5 `linework export`
+### 9.6 `linework export`
 
 Exports the current scene to a user-specified PNG path.
 
@@ -586,7 +638,7 @@ Flags:
 - `--out PATH`
 - `--json`
 
-### 9.6 `linework watch`
+### 9.7 `linework watch`
 
 Opens a read-only watcher window for an existing session.
 
@@ -602,21 +654,23 @@ Behavior:
 
 The watcher must not mutate session state.
 
-### 9.7 `linework draw`
+### 9.8 `linework draw`
 
 Convenience command for creating a single new object.
 
 Primitive subcommands:
 
 - `linework draw line`
+- `linework draw arrow`
 - `linework draw rect`
 - `linework draw ellipse`
+- `linework draw circle`
 - `linework draw polyline`
 - `linework draw polygon`
 - `linework draw text`
 - `linework draw image`
 
-### 9.8 `linework edit`
+### 9.9 `linework edit`
 
 Convenience command for modifying a single existing object by stable ID or
 unique live label.
@@ -624,8 +678,10 @@ unique live label.
 Primitive subcommands:
 
 - `linework edit line`
+- `linework edit arrow`
 - `linework edit rect`
 - `linework edit ellipse`
+- `linework edit circle`
 - `linework edit polyline`
 - `linework edit polygon`
 - `linework edit text`
@@ -635,7 +691,7 @@ All edit commands must support partial updates. Only provided fields are changed
 
 Edits must not change stacking order.
 
-### 9.9 `linework delete`
+### 9.10 `linework delete`
 
 Convenience command for deleting a single object by stable object ID or unique
 live label.
@@ -647,7 +703,7 @@ Behavior:
 - removes the object from current scene state
 - preserves recoverability through command history and undo
 
-### 9.10 `linework undo`
+### 9.11 `linework undo`
 
 Convenience command for undoing the most recent action.
 
@@ -659,13 +715,15 @@ Behavior:
 - updates `scene.json`
 - re-renders `render/latest.png`
 
-### 9.11 Convenience command parameter contract
+### 9.12 Convenience command parameter contract
 
 The convenience primitive commands must use these parameter names:
 
 - `linework draw line --session PATH --x1 N --y1 N --x2 N --y2 N`
+- `linework draw arrow --session PATH --x1 N --y1 N --x2 N --y2 N`
 - `linework draw rect --session PATH --x N --y N --width N --height N`
 - `linework draw ellipse --session PATH --x N --y N --width N --height N`
+- `linework draw circle --session PATH --x N --y N --radius N`
 - `linework draw polyline --session PATH --point X,Y --point X,Y ...`
 - `linework draw polygon --session PATH --point X,Y --point X,Y --point X,Y ...`
 - `linework draw text --session PATH --x N --y N --text STRING`
@@ -675,7 +733,7 @@ Create commands may also accept:
 
 - `--label STRING`
 - `--visible true|false`
-- applicable style flags such as `--stroke`, `--fill`, `--stroke-width`, `--size`
+- applicable style flags such as `--stroke`, `--fill`, `--stroke-width`, `--size`, `--arrowhead`, `--arrow-size`, `--anchor`, and `--max-width`
 
 Edit commands must use the same field names and additionally require:
 
@@ -773,7 +831,25 @@ Style fields:
 - `stroke`
 - `stroke_width`
 
-### 11.2 Rectangle
+### 11.2 Arrow
+
+Type: `arrow`
+
+Geometry fields:
+
+- `x1`
+- `y1`
+- `x2`
+- `y2`
+
+Style and arrow fields:
+
+- `stroke`
+- `stroke_width`
+- `arrowhead` with values `end`, `start`, `both`, `none`
+- `arrow_size` optional positive number in pixels
+
+### 11.3 Rectangle
 
 Type: `rect`
 
@@ -790,7 +866,7 @@ Style fields:
 - `fill`
 - `stroke_width`
 
-### 11.3 Ellipse
+### 11.4 Ellipse
 
 Type: `ellipse`
 
@@ -807,7 +883,14 @@ Style fields:
 - `fill`
 - `stroke_width`
 
-### 11.4 Polyline
+Circle convenience alias behavior:
+
+- `draw.circle` and `edit.circle` are user-facing aliases stored as `ellipse`
+  objects
+- the alias uses `x`, `y`, and `radius`
+- `radius` maps to equal `width` and `height`
+
+### 11.5 Polyline
 
 Type: `polyline`
 
@@ -832,7 +915,7 @@ Style fields:
 - `stroke`
 - `stroke_width`
 
-### 11.5 Polygon
+### 11.6 Polygon
 
 Type: `polygon`
 
@@ -861,7 +944,7 @@ Style fields:
 - `fill`
 - `stroke_width`
 
-### 11.6 Text
+### 11.7 Text
 
 Type: `text`
 
@@ -871,6 +954,8 @@ Geometry and content fields:
 - `y`
 - `text`
 - `size`
+- `anchor`
+- `max_width` optional
 
 Style field:
 
@@ -878,12 +963,11 @@ Style field:
 
 Text behavior:
 
-- basic text placement only
-- no wrapping
-- no alignment controls
+- `anchor` controls horizontal alignment with values `left`, `center`, `right`
+- `max_width` enables basic word wrapping based on rendered font metrics
 - no rich text
 
-### 11.7 Image
+### 11.8 Image
 
 Type: `image`
 
@@ -917,15 +1001,19 @@ It is batch-oriented, not a persistent daemon protocol.
 ### 12.1 Supported operations
 
 - `draw.line`
+- `draw.arrow`
 - `draw.rect`
 - `draw.ellipse`
+- `draw.circle`
 - `draw.polyline`
 - `draw.polygon`
 - `draw.text`
 - `draw.image`
 - `edit.line`
+- `edit.arrow`
 - `edit.rect`
 - `edit.ellipse`
+- `edit.circle`
 - `edit.polyline`
 - `edit.polygon`
 - `edit.text`
@@ -939,8 +1027,10 @@ Each input line is a JSON object with `op` and `payload` fields:
 
 ```json
 {"op":"draw.rect","payload":{"x":80.0,"y":120.0,"width":300.0,"height":180.0,"stroke":"#000000","fill":"#EEEEEE","stroke_width":2.0,"label":"api-box"}}
+{"op":"draw.arrow","payload":{"x1":340.0,"y1":210.0,"x2":520.0,"y2":210.0,"stroke":"#333333","stroke_width":3.0,"arrowhead":"both","arrow_size":18.0}}
+{"op":"draw.circle","payload":{"x":560.0,"y":120.0,"radius":28.0,"fill":"#BFDBFE"}}
 {"op":"draw.polygon","payload":{"points":[[380.0,120.0],[520.0,60.0],[620.0,160.0]],"fill":"#FF6666","stroke":"#AA3333","label":"roof"}}
-{"op":"draw.text","payload":{"x":100.0,"y":160.0,"text":"API flow","size":28.0,"fill":"#000000"}}
+{"op":"draw.text","payload":{"x":100.0,"y":160.0,"text":"API flow","size":28.0,"anchor":"center","max_width":240.0,"fill":"#000000"}}
 {"op":"edit.rect","payload":{"id":"obj_000001","fill":"#CCCCCC"}}
 {"op":"delete","payload":{"label":"api-box"}}
 {"op":"undo","payload":{}}
@@ -953,7 +1043,7 @@ command log. `delete` may target a unique live label instead of an ID. For
 
 ### 12.3 Output format
 
-See §9.3 for the full `linework run --json` output specification.
+See §9.4 for the full `linework run --json` output specification.
 
 ### 12.4 End-to-end agent example
 
@@ -1071,6 +1161,7 @@ Fixture categories:
 - blank session
 - simple shapes session
 - text session
+- agent UX session (arrow, circle, text layout)
 - image placement session
 - undo/delete/edit session
 - batch JSONL session
@@ -1088,8 +1179,10 @@ Because the MVP bundles a single font and uses a single renderer stack, image re
 The test harness must validate at least:
 
 - `linework` no-arg bootstrap output
+- `linework schema`
 - `linework new`
 - `linework run` with JSONL input
+- `linework run --out`
 - `linework inspect`
 - `linework export`
 - convenience draw, edit, delete, undo commands

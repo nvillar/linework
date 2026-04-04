@@ -27,6 +27,7 @@
       "y": 18.0,
       "text": "API",
       "size": 16.0,
+      "anchor": "left",
       "fill": "#222222"
     },
     {

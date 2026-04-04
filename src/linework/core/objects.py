@@ -7,7 +7,13 @@ from pathlib import Path
 
 from PIL import Image
 
-from linework.constants import HEX_COLOR
+from linework.constants import (
+    ARROWHEAD_MODES,
+    DEFAULT_ARROWHEAD,
+    DEFAULT_TEXT_ANCHOR,
+    HEX_COLOR,
+    TEXT_ANCHORS,
+)
 from linework.core.errors import CommandValidationError
 
 ObjectDict = dict[str, object]
@@ -23,9 +29,13 @@ def build_object(
     """Build a normalized scene object from a draw command payload."""
     if command == "draw.line":
         return _build_line(payload=payload, object_id=object_id)
+    if command == "draw.arrow":
+        return _build_arrow(payload=payload, object_id=object_id)
     if command == "draw.rect":
         return _build_rect(payload=payload, object_id=object_id)
     if command == "draw.ellipse":
+        return _build_ellipse(payload=payload, object_id=object_id)
+    if command == "draw.circle":
         return _build_ellipse(payload=payload, object_id=object_id)
     if command == "draw.polyline":
         return _build_polyline(payload=payload, object_id=object_id)
@@ -54,7 +64,7 @@ def apply_edit(
     if "visible" in payload:
         current["visible"] = require_bool(payload.get("visible"), field="visible")
 
-    if object_type in {"line", "rect", "ellipse", "polyline", "polygon"}:
+    if object_type in {"line", "arrow", "rect", "ellipse", "polyline", "polygon"}:
         if "stroke" in payload:
             current["stroke"] = normalize_color(payload.get("stroke"), field="stroke")
         if "stroke_width" in payload:
@@ -77,11 +87,42 @@ def apply_edit(
             current["x"] = require_number(payload.get("x"), field="x")
         if "y" in payload:
             current["y"] = require_number(payload.get("y"), field="y")
+        if "anchor" in payload:
+            current["anchor"] = require_choice(
+                payload.get("anchor"),
+                field="anchor",
+                choices=TEXT_ANCHORS,
+            )
+        if "max_width" in payload:
+            max_width = require_optional_positive_number(
+                payload.get("max_width"),
+                field="max_width",
+            )
+            if max_width is None:
+                current.pop("max_width", None)
+            else:
+                current["max_width"] = max_width
 
-    if object_type == "line":
+    if object_type in {"line", "arrow"}:
         for field in ("x1", "y1", "x2", "y2"):
             if field in payload:
                 current[field] = require_number(payload.get(field), field=field)
+    if object_type == "arrow":
+        if "arrowhead" in payload:
+            current["arrowhead"] = require_choice(
+                payload.get("arrowhead"),
+                field="arrowhead",
+                choices=ARROWHEAD_MODES,
+            )
+        if "arrow_size" in payload:
+            arrow_size = require_optional_positive_number(
+                payload.get("arrow_size"),
+                field="arrow_size",
+            )
+            if arrow_size is None:
+                current.pop("arrow_size", None)
+            else:
+                current["arrow_size"] = arrow_size
 
     if object_type in {"rect", "ellipse", "image"}:
         for field in ("x", "y"):
@@ -140,6 +181,13 @@ def require_positive_number(value: object, *, field: str) -> float:
     return number
 
 
+def require_optional_positive_number(value: object, *, field: str) -> float | None:
+    """Normalize an optional strictly positive numeric field to float."""
+    if value is None:
+        return None
+    return require_positive_number(value, field=field)
+
+
 def require_string(value: object, *, field: str) -> str:
     """Normalize a required string field."""
     if not isinstance(value, str):
@@ -159,6 +207,15 @@ def require_bool(value: object, *, field: str) -> bool:
     if not isinstance(value, bool):
         raise CommandValidationError(f"{field} must be a boolean")
     return value
+
+
+def require_choice(value: object, *, field: str, choices: Sequence[str]) -> str:
+    """Normalize a string field constrained to a known value set."""
+    text = require_string(value, field=field).lower()
+    if text not in choices:
+        choices_text = ", ".join(choices)
+        raise CommandValidationError(f"{field} must be one of: {choices_text}")
+    return text
 
 
 def normalize_color(value: object, *, field: str) -> str:
@@ -228,6 +285,32 @@ def _build_line(*, payload: Mapping[str, object], object_id: str) -> ObjectDict:
             ),
         }
     )
+    return object_data
+
+
+def _build_arrow(*, payload: Mapping[str, object], object_id: str) -> ObjectDict:
+    object_data = normalize_common_fields(payload, object_id=object_id, object_type="arrow")
+    object_data.update(
+        {
+            "x1": require_number(payload.get("x1"), field="x1"),
+            "y1": require_number(payload.get("y1"), field="y1"),
+            "x2": require_number(payload.get("x2"), field="x2"),
+            "y2": require_number(payload.get("y2"), field="y2"),
+            "stroke": normalize_color(payload.get("stroke", "#000000"), field="stroke"),
+            "stroke_width": require_positive_number(
+                payload.get("stroke_width", 2.0),
+                field="stroke_width",
+            ),
+            "arrowhead": require_choice(
+                payload.get("arrowhead", DEFAULT_ARROWHEAD),
+                field="arrowhead",
+                choices=ARROWHEAD_MODES,
+            ),
+        }
+    )
+    arrow_size = require_optional_positive_number(payload.get("arrow_size"), field="arrow_size")
+    if arrow_size is not None:
+        object_data["arrow_size"] = arrow_size
     return object_data
 
 
@@ -327,11 +410,19 @@ def _build_text(*, payload: Mapping[str, object], object_id: str) -> ObjectDict:
             "y": require_number(payload.get("y"), field="y"),
             "text": require_string(payload.get("text"), field="text"),
             "size": require_positive_number(payload.get("size", 16.0), field="size"),
+            "anchor": require_choice(
+                payload.get("anchor", DEFAULT_TEXT_ANCHOR),
+                field="anchor",
+                choices=TEXT_ANCHORS,
+            ),
         }
     )
     fill = normalize_optional_color(payload.get("fill"), field="fill")
     if fill is not None:
         object_data["fill"] = fill
+    max_width = require_optional_positive_number(payload.get("max_width"), field="max_width")
+    if max_width is not None:
+        object_data["max_width"] = max_width
     return object_data
 
 

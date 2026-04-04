@@ -53,9 +53,12 @@ def test_module_entry_point_prints_bootstrap() -> None:
     assert result.stderr == ""
 
 
-def test_bootstrap_text_mentions_golden_path_and_polygon() -> None:
+def test_bootstrap_text_mentions_schema_and_new_shapes() -> None:
+    assert "linework schema --json" in BOOTSTRAP_TEXT
     assert "Golden path:" in BOOTSTRAP_TEXT
     assert '"draw.polygon"' in BOOTSTRAP_TEXT
+    assert '"draw.arrow"' in BOOTSTRAP_TEXT
+    assert '"draw.circle"' in BOOTSTRAP_TEXT
     assert "inspect --session PATH --json" in BOOTSTRAP_TEXT
 
 
@@ -72,6 +75,7 @@ def test_top_level_help_includes_golden_path() -> None:
 
     assert result.returncode == 0
     assert "Golden path:" in result.stdout
+    assert "linework schema --json" in result.stdout
     assert "linework run --session PATH --json < ops.jsonl" in result.stdout
     assert result.stderr == ""
 
@@ -93,6 +97,26 @@ def test_watch_help_lists_interval_flag() -> None:
     assert "--session" in result.stdout
     assert "--interval-ms" in result.stdout
     assert "read-only watcher window" in result.stdout
+    assert result.stderr == ""
+
+
+def test_schema_command_outputs_machine_readable_manifest() -> None:
+    result = run_cli("schema", "--json")
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["canvas_defaults"] == {
+        "width": 800,
+        "height": 800,
+        "background": "#FFFFFF",
+    }
+    assert payload["ops"]["draw.arrow"]["optional"]["arrow_size"]["type"] == "positive-number|null"
+    assert payload["ops"]["draw.circle"]["required"]["radius"]["type"] == "positive-number"
+    assert payload["ops"]["draw.text"]["optional"]["anchor"]["enum"] == [
+        "left",
+        "center",
+        "right",
+    ]
     assert result.stderr == ""
 
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 
+from linework.capabilities import stored_object_type_for_op
 from linework.core.errors import CommandValidationError, ObjectNotFoundError
 from linework.core.objects import ObjectDict, apply_edit, build_object
 from linework.storage.models import Canvas, CommandRecord, SceneSnapshot
@@ -133,8 +134,8 @@ def edit_object(
             continue
 
         existing_type = str(existing["type"])
-        expected_command = f"edit.{existing_type}"
-        if command_op != expected_command:
+        expected_type = stored_object_type_for_op(command_op)
+        if expected_type is None or existing_type != expected_type:
             raise CommandValidationError(
                 f"object {target_id} is type '{existing_type}', not compatible with '{command_op}'"
             )

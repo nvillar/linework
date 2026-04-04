@@ -28,6 +28,7 @@
       "y": 28.0,
       "text": "alpha",
       "size": 20.0,
+      "anchor": "left",
       "fill": "#222222"
     }
   ]

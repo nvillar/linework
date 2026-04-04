@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "session_id": "agent-ux-session",
+  "canvas": {
+    "width": 200,
+    "height": 160,
+    "background": "#FFFFFF"
+  },
+  "objects": [
+    {
+      "id": "obj_000001",
+      "type": "arrow",
+      "visible": true,
+      "label": "flow",
+      "x1": 18.0,
+      "y1": 28.0,
+      "x2": 182.0,
+      "y2": 28.0,
+      "stroke": "#2563EB",
+      "stroke_width": 4.0,
+      "arrowhead": "both",
+      "arrow_size": 20.0
+    },
+    {
+      "id": "obj_000002",
+      "type": "ellipse",
+      "visible": true,
+      "label": "node",
+      "x": 24.0,
+      "y": 62.0,
+      "width": 36.0,
+      "height": 36.0,
+      "stroke": "#92400E",
+      "stroke_width": 3.0,
+      "fill": "#F59E0B"
+    },
+    {
+      "id": "obj_000003",
+      "type": "text",
+      "visible": true,
+      "label": "caption",
+      "x": 128.0,
+      "y": 88.0,
+      "text": "Wrapped text for agents",
+      "size": 18.0,
+      "anchor": "center",
+      "fill": "#111111",
+      "max_width": 92.0
+    }
+  ]
+}

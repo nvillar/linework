@@ -220,6 +220,28 @@ class TestApplyBatch:
         assert inspected.object_count == 1
         assert inspected.objects[0]["type"] == "rect"
 
+    def test_batch_unsupported_command_suggests_valid_ops(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        session_path = make_session(tmp_path, monkeypatch)
+        result = apply_batch(
+            session_path,
+            operations=[
+                {
+                    "op": "draw.oval",
+                    "payload": {"x": 10, "y": 10, "width": 50, "height": 40},
+                }
+            ],
+        )
+
+        assert result.applied == 0
+        assert result.failed is not None
+        assert result.failed["op"] == "draw.oval"
+        assert "did you mean draw.ellipse?" in result.failed["error"]
+        assert "valid draw ops:" in result.failed["error"]
+        assert "draw.arrow" in result.failed["error"]
+        assert "draw.circle" in result.failed["error"]
+
 
 # ---------------------------------------------------------------------------
 # linework inspect (API level)
@@ -333,6 +355,40 @@ class TestRunCLI:
         assert payload["applied"] == 1
         assert payload["failed"] is not None
         assert payload["failed"]["op"] == "bad.op"
+
+    def test_run_without_session_can_export_one_shot_png(self, tmp_path: Path) -> None:
+        linework_home = tmp_path / "linework-home"
+        out_path = tmp_path / "one-shot.png"
+        result = run_cli(
+            "run",
+            "--out",
+            str(out_path),
+            "--json",
+            env={"LINEWORK_HOME": str(linework_home)},
+            stdin='{"op":"draw.circle","payload":{"x":20,"y":20,"radius":24,"fill":"#FF0000"}}\n',
+        )
+
+        assert result.returncode == 0
+        payload = json.loads(result.stdout)
+        assert payload["applied"] == 1
+        assert payload["exported_path"] == str(out_path.resolve())
+        assert "session_path" not in payload
+        assert "latest_render" not in payload
+        assert out_path.is_file()
+        with Image.open(out_path) as exported:
+            assert exported.getpixel((40, 40)) == (255, 0, 0, 255)
+
+    def test_run_requires_session_or_out_json_error(self, tmp_path: Path) -> None:
+        result = run_cli(
+            "run",
+            "--json",
+            env={"LINEWORK_HOME": str(tmp_path / "linework-home")},
+            stdin='{"op":"draw.rect","payload":{"x":10,"y":10,"width":50,"height":30}}\n',
+        )
+
+        assert result.returncode == 1
+        payload = json.loads(result.stdout)
+        assert payload == {"error": "either --session or --out must be provided"}
 
     def test_run_from_file(self, tmp_path: Path) -> None:
         linework_home = tmp_path / "linework-home"
