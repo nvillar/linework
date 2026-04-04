@@ -16,7 +16,7 @@ from linework.config import locks_root
 from linework.storage.ids import format_object_id, format_operation_id
 from linework.storage.lock import SessionLockedError, writer_lock
 from linework.storage.session import create_session
-from linework.watch import DEFAULT_INTERVAL_MS, WatchUnavailableError
+from linework.watch import DEFAULT_INTERVAL_MS, WatchError, WatchUnavailableError
 
 
 def run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -347,6 +347,190 @@ def test_new_watch_json_emits_session_output(
     assert payload["session_path"] == str(session_path)
     assert payload["session_id"] == "watched-session"
     assert captured.err == ""
+
+
+def test_watch_impl_writes_ready_status_before_running(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import cli
+
+    status_path = tmp_path / "startup.json"
+    seen: dict[str, object] = {}
+
+    class FakeWatcher:
+        def run(self) -> None:
+            seen["ran"] = True
+
+    def fake_create_session_watcher(session: str, *, interval_ms: int) -> FakeWatcher:
+        seen["session"] = session
+        seen["interval_ms"] = interval_ms
+        return FakeWatcher()
+
+    monkeypatch.setattr(cli, "create_session_watcher", fake_create_session_watcher)
+
+    exit_code = cli.main(
+        [
+            "_watch-impl",
+            "--session",
+            str(tmp_path / "session"),
+            "--interval-ms",
+            "375",
+            "--startup-status",
+            str(status_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert json.loads(status_path.read_text(encoding="utf-8")) == {"status": "ready"}
+    assert seen == {
+        "session": str(tmp_path / "session"),
+        "interval_ms": 375,
+        "ran": True,
+    }
+
+
+def test_watch_impl_writes_error_status_when_startup_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from linework import cli
+
+    status_path = tmp_path / "startup.json"
+
+    def fake_create_session_watcher(session: str, *, interval_ms: int) -> object:
+        raise WatchUnavailableError("tkinter is unavailable in the active Python environment")
+
+    monkeypatch.setattr(cli, "create_session_watcher", fake_create_session_watcher)
+
+    exit_code = cli.main(
+        [
+            "_watch-impl",
+            "--session",
+            str(tmp_path / "session"),
+            "--startup-status",
+            str(status_path),
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert json.loads(status_path.read_text(encoding="utf-8")) == {
+        "status": "error",
+        "error": "tkinter is unavailable in the active Python environment",
+    }
+    assert "tkinter is unavailable in the active Python environment" in captured.err
+
+
+def test_launch_detached_watcher_waits_for_ready_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import cli
+
+    session_path = tmp_path / "watch-session"
+    create_session(
+        session=str(session_path),
+        name=None,
+        width=800,
+        height=800,
+        background="#FFFFFF",
+    )
+
+    captured: dict[str, object] = {}
+
+    class FakeProcess:
+        pid = 32100
+
+        def poll(self) -> int | None:
+            return None
+
+    def fake_popen(cmd: list[str], **kwargs: object) -> FakeProcess:
+        captured["cmd"] = cmd
+        captured["kwargs"] = kwargs
+        status_path = Path(cmd[cmd.index("--startup-status") + 1])
+        status_path.write_text(json.dumps({"status": "ready"}), encoding="utf-8")
+        return FakeProcess()
+
+    monkeypatch.setattr(cli.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(cli.sys, "argv", ["linework"])
+    monkeypatch.setattr(cli.shutil, "which", lambda command: f"/resolved/{command}")
+
+    pid = cli._launch_detached_watcher(str(session_path), interval_ms=410)
+
+    cmd = captured["cmd"]
+    kwargs = captured["kwargs"]
+    assert pid == 32100
+    assert cmd[:7] == [
+        "/resolved/linework",
+        "_watch-impl",
+        "--session",
+        str(session_path.resolve()),
+        "--interval-ms",
+        "410",
+        "--startup-status",
+    ]
+    assert Path(cmd[7]).name == "startup.json"
+    assert kwargs["start_new_session"] is True
+
+
+def test_launch_detached_watcher_raises_startup_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import cli
+
+    session_path = tmp_path / "watch-session"
+    create_session(
+        session=str(session_path),
+        name=None,
+        width=800,
+        height=800,
+        background="#FFFFFF",
+    )
+
+    class FakeProcess:
+        pid = 32101
+
+        def poll(self) -> int | None:
+            return None
+
+    def fake_popen(cmd: list[str], **kwargs: object) -> FakeProcess:
+        status_path = Path(cmd[cmd.index("--startup-status") + 1])
+        status_path.write_text(
+            json.dumps({"status": "error", "error": "watcher startup failed"}),
+            encoding="utf-8",
+        )
+        return FakeProcess()
+
+    monkeypatch.setattr(cli.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(cli.sys, "argv", ["/resolved/linework"])
+
+    with pytest.raises(WatchError, match="watcher startup failed"):
+        cli._launch_detached_watcher(str(session_path))
+
+
+def test_launch_detached_watcher_errors_when_child_exits_before_ready(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import cli
+
+    session_path = tmp_path / "watch-session"
+    create_session(
+        session=str(session_path),
+        name=None,
+        width=800,
+        height=800,
+        background="#FFFFFF",
+    )
+
+    class FakeProcess:
+        pid = 32102
+
+        def poll(self) -> int | None:
+            return 7
+
+    monkeypatch.setattr(cli.subprocess, "Popen", lambda cmd, **kwargs: FakeProcess())
+    monkeypatch.setattr(cli.sys, "argv", ["/resolved/linework"])
+
+    with pytest.raises(WatchError, match="exit code 7"):
+        cli._launch_detached_watcher(str(session_path))
 
 
 def test_writer_lock_blocks_overlapping_access(

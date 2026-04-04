@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -31,7 +33,7 @@ from linework.storage.session import (
     export_session,
     inspect_session,
 )
-from linework.watch import DEFAULT_INTERVAL_MS, WatchError, watch_session
+from linework.watch import DEFAULT_INTERVAL_MS, WatchError, create_session_watcher
 
 
 class _HelpFormatter(
@@ -122,6 +124,8 @@ Examples:
 Undo reverses the last action. A successful `linework run` batch undoes as one
 action.
 """
+
+_WATCHER_STARTUP_TIMEOUT_S = 5.0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -263,6 +267,7 @@ def build_parser() -> argparse.ArgumentParser:
     watch_impl_parser = subparsers.add_parser("_watch-impl")
     watch_impl_parser.add_argument("--session", required=True)
     watch_impl_parser.add_argument("--interval-ms", type=int, default=DEFAULT_INTERVAL_MS)
+    watch_impl_parser.add_argument("--startup-status")
 
     # --- draw ---
     draw_parser = subparsers.add_parser(
@@ -1400,10 +1405,103 @@ def cmd_watch(args: argparse.Namespace) -> int:
 def _cmd_watch_impl(args: argparse.Namespace) -> int:
     """Hidden command: run the watcher in the foreground (used by detached launcher)."""
     try:
-        watch_session(args.session, interval_ms=args.interval_ms)
+        watcher = create_session_watcher(args.session, interval_ms=args.interval_ms)
     except (OSError, SessionError, WatchError) as exc:
+        _write_watcher_startup_status(
+            args.startup_status,
+            status="error",
+            error=str(exc),
+        )
         return _error(str(exc), use_json=False)
+    _write_watcher_startup_status(args.startup_status, status="ready")
+    watcher.run()
     return 0
+
+
+def _write_watcher_startup_status(
+    status_path: str | None,
+    *,
+    status: str,
+    error: str | None = None,
+) -> None:
+    """Write the detached watcher startup status for the parent process."""
+    if status_path is None:
+        return
+
+    path = Path(status_path)
+    temp_path = path.with_name(f"{path.name}.tmp")
+    payload: dict[str, str] = {"status": status}
+    if error is not None:
+        payload["error"] = error
+    temp_path.write_text(json.dumps(payload), encoding="utf-8")
+    temp_path.replace(path)
+
+
+def _read_watcher_startup_status(status_path: Path) -> dict[str, str] | None:
+    """Read a watcher startup status file once it contains valid JSON."""
+    if not status_path.is_file():
+        return None
+
+    text = status_path.read_text(encoding="utf-8").strip()
+    if not text:
+        return None
+
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+
+    if not isinstance(payload, dict):
+        raise WatchError("watcher returned invalid startup status")
+
+    normalized: dict[str, str] = {}
+    for key in ("status", "error"):
+        value = payload.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            raise WatchError("watcher returned invalid startup status")
+        normalized[key] = value
+    return normalized
+
+
+def _await_watcher_startup(process: subprocess.Popen[bytes], status_path: Path) -> None:
+    """Wait for the detached watcher child to confirm startup or fail."""
+    deadline = time.monotonic() + _WATCHER_STARTUP_TIMEOUT_S
+    while time.monotonic() < deadline:
+        payload = _read_watcher_startup_status(status_path)
+        if payload is not None:
+            if payload.get("status") == "ready":
+                return
+            error = payload.get("error", "watcher failed to start")
+            raise WatchError(error)
+
+        exit_code = process.poll()
+        if exit_code is not None:
+            raise WatchError(
+                f"watcher process exited before confirming startup (exit code {exit_code})"
+            )
+        time.sleep(0.05)
+
+    exit_code = process.poll()
+    if exit_code is not None:
+        raise WatchError(f"watcher process exited during startup (exit code {exit_code})")
+    raise WatchError(
+        f"watcher did not confirm startup within {_WATCHER_STARTUP_TIMEOUT_S:g} seconds"
+    )
+
+
+def _watch_impl_command() -> list[str]:
+    """Build the command used to re-invoke linework for the hidden watcher child."""
+    argv0 = sys.argv[0] if sys.argv else ""
+    if argv0.endswith("__main__.py") or not argv0:
+        return [sys.executable, "-m", "linework", "_watch-impl"]
+
+    if "/" in argv0 or "\\" in argv0:
+        executable = str(Path(argv0).expanduser().resolve())
+    else:
+        executable = shutil.which(argv0) or argv0
+    return [executable, "_watch-impl"]
 
 
 def _launch_detached_watcher(
@@ -1419,44 +1517,44 @@ def _launch_detached_watcher(
 
     resolved = Path(session).expanduser().resolve()
     read_session_metadata(resolved)
+    with tempfile.TemporaryDirectory(prefix="linework-watch-startup-") as temp_dir:
+        status_path = Path(temp_dir) / "startup.json"
+        cmd = _watch_impl_command() + [
+            "--session",
+            str(resolved),
+            "--interval-ms",
+            str(interval_ms),
+            "--startup-status",
+            str(status_path),
+        ]
 
-    # Re-invoke ourselves so the detached child works whether linework
-    # was installed via `uv tool install`, `uv run`, or `python -m linework`.
-    argv0 = sys.argv[0] if sys.argv else ""
-    if argv0.endswith("__main__.py") or not argv0:
-        # Invoked as `python -m linework` — use the same interpreter + module.
-        cmd = [sys.executable, "-m", "linework", "_watch-impl"]
-    else:
-        # Invoked via an entry point script (e.g. `uv tool install`).
-        # The script has its own shebang, so run it directly.
-        cmd = [argv0, "_watch-impl"]
-    cmd += ["--session", str(session), "--interval-ms", str(interval_ms)]
+        if sys.platform == "win32":
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+            DETACHED_PROCESS = 0x00000008
+            process = subprocess.Popen(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+                creationflags=CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS,
+            )
+        else:
+            # Use file-based /dev/null rather than subprocess.DEVNULL.
+            # On macOS, subprocess.DEVNULL can interfere with tkinter's
+            # Tcl resource discovery when stdin is redirected.
+            devnull = open("/dev/null", "w")  # noqa: SIM115
+            process = subprocess.Popen(
+                cmd,
+                stdout=devnull,
+                stderr=devnull,
+                close_fds=True,
+                start_new_session=True,
+            )
+            devnull.close()
 
-    if sys.platform == "win32":
-        CREATE_NEW_PROCESS_GROUP = 0x00000200
-        DETACHED_PROCESS = 0x00000008
-        process = subprocess.Popen(
-            cmd,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            close_fds=True,
-            creationflags=CREATE_NEW_PROCESS_GROUP | DETACHED_PROCESS,
-        )
-    else:
-        # Use file-based /dev/null rather than subprocess.DEVNULL.
-        # On macOS, subprocess.DEVNULL can interfere with tkinter's
-        # Tcl resource discovery when stdin is redirected.
-        devnull = open("/dev/null", "w")  # noqa: SIM115
-        process = subprocess.Popen(
-            cmd,
-            stdout=devnull,
-            stderr=devnull,
-            close_fds=True,
-            start_new_session=True,
-        )
-        devnull.close()
-    return process.pid
+        _await_watcher_startup(process, status_path)
+        return process.pid
 
 
 # ---------------------------------------------------------------------------
