@@ -128,6 +128,98 @@ class TestApplyBatch:
         with Image.open(session_path / "render" / "latest.png") as img:
             assert img.getpixel((30, 30)) == (0, 0, 255, 255)
 
+    def test_batch_large_input(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        session_path = make_session(tmp_path, monkeypatch)
+        operations = [
+            {
+                "op": "draw.rect",
+                "payload": {
+                    "x": 2 * index,
+                    "y": 2 * index,
+                    "width": 10,
+                    "height": 8,
+                    "label": f"box-{index}",
+                },
+            }
+            for index in range(40)
+        ]
+
+        result = apply_batch(session_path, operations=operations)
+
+        assert result.applied == 40
+        assert result.failed is None
+        assert len(result.results) == 40
+        assert result.scene_object_count == 40
+
+    def test_batch_supports_label_based_edit_and_delete(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        session_path = make_session(tmp_path, monkeypatch)
+        apply_batch(
+            session_path,
+            operations=[
+                {
+                    "op": "draw.rect",
+                    "payload": {
+                        "x": 10,
+                        "y": 10,
+                        "width": 50,
+                        "height": 40,
+                        "label": "box",
+                    },
+                },
+            ],
+        )
+
+        edit_result = apply_batch(
+            session_path,
+            operations=[
+                {
+                    "op": "edit.rect",
+                    "payload": {"label": "box", "fill": "#00FF00"},
+                },
+            ],
+        )
+        assert edit_result.applied == 1
+        assert inspect_session(session_path).objects[0]["fill"] == "#00FF00"
+
+        delete_result = apply_batch(
+            session_path,
+            operations=[
+                {
+                    "op": "delete",
+                    "payload": {"label": "box"},
+                },
+            ],
+        )
+        assert delete_result.applied == 1
+        assert inspect_session(session_path).objects == []
+
+    def test_batch_undo_within_batch_only_removes_last_batch_operation(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        session_path = make_session(tmp_path, monkeypatch)
+        result = apply_batch(
+            session_path,
+            operations=[
+                {
+                    "op": "draw.rect",
+                    "payload": {"x": 10, "y": 10, "width": 50, "height": 40},
+                },
+                {
+                    "op": "draw.text",
+                    "payload": {"x": 20, "y": 60, "text": "hello", "size": 16},
+                },
+                {"op": "undo", "payload": {}},
+            ],
+        )
+
+        assert result.applied == 3
+        assert result.failed is None
+        inspected = inspect_session(session_path)
+        assert inspected.object_count == 1
+        assert inspected.objects[0]["type"] == "rect"
+
 
 # ---------------------------------------------------------------------------
 # linework inspect (API level)
@@ -296,7 +388,7 @@ class TestInspectCLI:
         payload = json.loads(result.stdout)
         assert payload["session_id"] == "cli-session"
         assert payload["object_count"] == 0
-        assert payload["canvas"]["width"] == 1200
+        assert payload["canvas"]["width"] == 800
         assert "latest_render" in payload
 
     def test_inspect_human_readable(self, tmp_path: Path) -> None:
@@ -316,7 +408,7 @@ class TestInspectCLI:
         )
         assert result.returncode == 0
         assert "Session: cli-session" in result.stdout
-        assert "Canvas: 1200x800" in result.stdout
+        assert "Canvas: 800x800" in result.stdout
 
     def test_inspect_missing_session_json_error(self, tmp_path: Path) -> None:
         linework_home = tmp_path / "linework-home"
@@ -329,7 +421,7 @@ class TestInspectCLI:
         )
         assert result.returncode == 1
         payload = json.loads(result.stdout)
-        assert "error" in payload
+        assert set(payload) == {"error"}
 
 
 # ---------------------------------------------------------------------------
@@ -380,7 +472,7 @@ class TestJsonErrorContract:
         )
         assert result.returncode == 1
         payload = json.loads(result.stdout)
-        assert "error" in payload
+        assert set(payload) == {"error"}
         assert "background" in payload["error"]
         assert result.stderr == ""
 
@@ -403,4 +495,4 @@ class TestJsonErrorContract:
         )
         assert result.returncode == 1
         payload = json.loads(result.stdout)
-        assert "error" in payload
+        assert set(payload) == {"error"}

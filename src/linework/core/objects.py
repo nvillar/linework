@@ -29,6 +29,8 @@ def build_object(
         return _build_ellipse(payload=payload, object_id=object_id)
     if command == "draw.polyline":
         return _build_polyline(payload=payload, object_id=object_id)
+    if command == "draw.polygon":
+        return _build_polygon(payload=payload, object_id=object_id)
     if command == "draw.text":
         return _build_text(payload=payload, object_id=object_id)
     if command == "draw.image":
@@ -52,7 +54,7 @@ def apply_edit(
     if "visible" in payload:
         current["visible"] = require_bool(payload.get("visible"), field="visible")
 
-    if object_type in {"line", "rect", "ellipse", "polyline"}:
+    if object_type in {"line", "rect", "ellipse", "polyline", "polygon"}:
         if "stroke" in payload:
             current["stroke"] = normalize_color(payload.get("stroke"), field="stroke")
         if "stroke_width" in payload:
@@ -61,7 +63,7 @@ def apply_edit(
                 field="stroke_width",
             )
 
-    if object_type in {"rect", "ellipse"} and "fill" in payload:
+    if object_type in {"rect", "ellipse", "polygon"} and "fill" in payload:
         current["fill"] = normalize_optional_color(payload.get("fill"), field="fill")
 
     if object_type == "text":
@@ -89,8 +91,11 @@ def apply_edit(
             if field in payload:
                 current[field] = require_positive_number(payload.get(field), field=field)
 
-    if object_type == "polyline" and "points" in payload:
-        current["points"] = normalize_points(payload.get("points"))
+    if object_type in {"polyline", "polygon"} and "points" in payload:
+        current["points"] = normalize_points(
+            payload.get("points"),
+            minimum_points=2 if object_type == "polyline" else 3,
+        )
 
     if object_type == "image":
         if "asset_path" in payload or "source_path" in payload:
@@ -171,8 +176,8 @@ def normalize_optional_color(value: object, *, field: str) -> str | None:
     return normalize_color(value, field=field)
 
 
-def normalize_points(value: object) -> list[list[float]]:
-    """Normalize a polyline points payload."""
+def normalize_points(value: object, *, minimum_points: int = 2) -> list[list[float]]:
+    """Normalize a point-list payload."""
     if not isinstance(value, Sequence) or isinstance(value, str | bytes):
         raise CommandValidationError("points must be a sequence")
 
@@ -184,8 +189,8 @@ def normalize_points(value: object) -> list[list[float]]:
         y = require_number(point[1], field=f"points[{index}][1]")
         normalized.append([x, y])
 
-    if len(normalized) < 2:
-        raise CommandValidationError("points must contain at least two points")
+    if len(normalized) < minimum_points:
+        raise CommandValidationError(f"points must contain at least {minimum_points} points")
 
     return normalized
 
@@ -269,10 +274,37 @@ def _build_ellipse(*, payload: Mapping[str, object], object_id: str) -> ObjectDi
 
 
 def _build_polyline(*, payload: Mapping[str, object], object_id: str) -> ObjectDict:
-    object_data = normalize_common_fields(payload, object_id=object_id, object_type="polyline")
+    return _build_points_object(
+        payload=payload,
+        object_id=object_id,
+        object_type="polyline",
+        minimum_points=2,
+        include_fill=False,
+    )
+
+
+def _build_polygon(*, payload: Mapping[str, object], object_id: str) -> ObjectDict:
+    return _build_points_object(
+        payload=payload,
+        object_id=object_id,
+        object_type="polygon",
+        minimum_points=3,
+        include_fill=True,
+    )
+
+
+def _build_points_object(
+    *,
+    payload: Mapping[str, object],
+    object_id: str,
+    object_type: str,
+    minimum_points: int,
+    include_fill: bool,
+) -> ObjectDict:
+    object_data = normalize_common_fields(payload, object_id=object_id, object_type=object_type)
     object_data.update(
         {
-            "points": normalize_points(payload.get("points")),
+            "points": normalize_points(payload.get("points"), minimum_points=minimum_points),
             "stroke": normalize_color(payload.get("stroke", "#000000"), field="stroke"),
             "stroke_width": require_positive_number(
                 payload.get("stroke_width", 2.0),
@@ -280,6 +312,10 @@ def _build_polyline(*, payload: Mapping[str, object], object_id: str) -> ObjectD
             ),
         }
     )
+    if include_fill:
+        fill = normalize_optional_color(payload.get("fill"), field="fill")
+        if fill is not None:
+            object_data["fill"] = fill
     return object_data
 
 

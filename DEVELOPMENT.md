@@ -94,17 +94,20 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - packaging validation
 - `uv tool install` validation
 
-#### Milestone 9: Polish and test coverage (open)
+#### Milestone 9: Polish and test coverage (complete)
 
-- normalize `--json` error envelope in `new --watch` failure path
-- refactor `apply_batch()` to remove duplicated scene-derivation branches
-- add tests for JSON error envelope consistency across commands
-- add tests for `apply_batch()` edge cases
-- add tests for CLI argument validation edge cases
+- default canvas now `800x800`
+- `polygon` primitive for filled closed shapes
+- label-based selection for `delete` and `edit.*` when IDs are omitted
+- batch-aware undo (`linework run` undoes as one action)
+- normalized `--json` error envelope in `new --watch` failure path
+- refactored `apply_batch()` to remove duplicated scene-derivation branches
+- expanded JSON error, batch edge case, and CLI validation coverage
+- refreshed bootstrap text, subcommand help, and polygon regression fixtures
 
 ### Current implementation status
 
-Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8.
+Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9.
 
 Current user-facing command surface:
 
@@ -115,28 +118,34 @@ Current user-facing command surface:
 - `linework inspect`
 - `linework export`
 - `linework watch`
-- `linework draw line|rect|ellipse|polyline|text|image`
-- `linework edit line|rect|ellipse|polyline|text|image`
+- `linework draw line|rect|ellipse|polyline|polygon|text|image`
+- `linework edit line|rect|ellipse|polyline|polygon|text|image`
 - `linework delete`
 - `linework undo`
 
 Internal engine capabilities:
 
-- append-only mutation engine for `draw.line`, `draw.rect`, `draw.ellipse`, `draw.polyline`, `draw.text`, `draw.image`, `edit.*`, `delete`, `undo`
+- append-only mutation engine for `draw.line`, `draw.rect`, `draw.ellipse`, `draw.polyline`, `draw.polygon`, `draw.text`, `draw.image`, `edit.*`, `delete`, `undo`
 - JSONL batch execution with single-render-at-end semantics
+- batch-aware undo grouping for `linework run`
 - scene replay from command history
 - PNG rendering for all supported primitives
+- label-based selection for edit/delete with disambiguation on collisions
 - bundled Noto Sans default font for deterministic text rendering
 - session-local asset import/copy for image convenience commands
 - read-only watcher window with lazy `tkinter` loading and polling refresh
-- fixture-based regression harness for blank, shapes, text, image, undo/edit/delete, and batch cases
+- fixture-based regression harness for blank, shapes, polygon, text, image, undo/edit/delete, and batch cases
 - automated packaging/build validation plus isolated `uv tool install` validation
 - structured `--json` output and `--json` error output for all mutation commands (`linework watch` is display-only and does not use `--json`)
+- richer bootstrap text and subcommand help with an inspect → edit/delete golden path
 
 Implementation notes:
 
 - text rendering uses a bundled Noto Sans font shipped in `src/linework/assets/`
 - image rendering and export now validate session-local assets; image source replacement remains out of scope
+- `linework new` now defaults to an `800x800` canvas
+- `new --watch --json` keeps creating the session, but returns an error-only JSON envelope on watcher startup failure
+- `linework edit` can select by label when `--id` is omitted; use `--id` when relabeling
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 
-Next milestone: **Milestone 9 — Polish and test coverage.**
+Next milestone: **TBD.**

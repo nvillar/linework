@@ -131,26 +131,34 @@ class CommandRecord:
     timestamp: str
     op: str
     payload: dict[str, object]
+    batch_id: str | None = None
 
     def to_dict(self) -> dict[str, object]:
         """Serialize the command record."""
-        return {
+        payload: dict[str, object] = {
             "schema_version": self.schema_version,
             "op_id": self.op_id,
             "timestamp": self.timestamp,
             "op": self.op,
             "payload": self.payload,
         }
+        if self.batch_id is not None:
+            payload["batch_id"] = self.batch_id
+        return payload
 
     @classmethod
     def from_dict(cls, payload: dict[str, object]) -> CommandRecord:
         """Deserialize a command record."""
+        batch_id = payload.get("batch_id")
+        if batch_id is not None and not isinstance(batch_id, str):
+            raise ValueError("batch_id must be a string")
         return cls(
             schema_version=require_int(payload.get("schema_version"), field="schema_version"),
             op_id=require_str(payload.get("op_id"), field="op_id"),
             timestamp=require_str(payload.get("timestamp"), field="timestamp"),
             op=require_str(payload.get("op"), field="op"),
             payload=require_mapping(payload.get("payload"), field="payload"),
+            batch_id=batch_id,
         )
 
 

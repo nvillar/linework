@@ -41,3 +41,8 @@ def format_object_id(index: int) -> str:
 def format_operation_id(index: int) -> str:
     """Format an operation identifier."""
     return f"op_{index:06d}"
+
+
+def format_batch_id(index: int) -> str:
+    """Format a batch identifier."""
+    return f"batch_{index:06d}"

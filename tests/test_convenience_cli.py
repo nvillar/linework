@@ -46,8 +46,9 @@ def test_draw_help_lists_delivered_primitives_only() -> None:
     result = run_cli("draw", "--help")
 
     assert result.returncode == 0
-    for primitive in ("line", "rect", "ellipse", "polyline", "text", "image"):
+    for primitive in ("line", "rect", "ellipse", "polyline", "polygon", "text", "image"):
         assert primitive in result.stdout
+    assert "Examples:" in result.stdout
     assert result.stderr == ""
 
 
@@ -55,8 +56,9 @@ def test_edit_help_lists_delivered_primitives_only() -> None:
     result = run_cli("edit", "--help")
 
     assert result.returncode == 0
-    for primitive in ("line", "rect", "ellipse", "polyline", "text", "image"):
+    for primitive in ("line", "rect", "ellipse", "polyline", "polygon", "text", "image"):
         assert primitive in result.stdout
+    assert "When --id is omitted" in result.stdout
     assert result.stderr == ""
 
 
@@ -121,6 +123,33 @@ def test_draw_polyline_accepts_repeated_points(tmp_path: Path) -> None:
     assert scene["objects"][0]["points"] == [[0.0, 0.0], [10.0, 20.0], [20.0, 10.0]]
 
 
+def test_draw_polygon_accepts_points_and_fill(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+
+    result = run_cli(
+        "draw",
+        "polygon",
+        "--session",
+        str(session_path),
+        "--point",
+        "0,0",
+        "--point",
+        "20,0",
+        "--point",
+        "10,15",
+        "--fill",
+        "#FF66CC",
+        "--json",
+        env=env,
+    )
+
+    assert result.returncode == 0
+    scene = read_scene(session_path)
+    assert scene["objects"][0]["type"] == "polygon"
+    assert scene["objects"][0]["points"] == [[0.0, 0.0], [20.0, 0.0], [10.0, 15.0]]
+    assert scene["objects"][0]["fill"] == "#FF66CC"
+
+
 def test_edit_rect_json_updates_existing_object(tmp_path: Path) -> None:
     session_path, env = create_cli_session(tmp_path)
 
@@ -168,6 +197,87 @@ def test_edit_rect_json_updates_existing_object(tmp_path: Path) -> None:
     assert scene["objects"][0]["fill"] == "#00FF00"
 
 
+def test_edit_rect_by_label_updates_unique_object(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+
+    draw_result = run_cli(
+        "draw",
+        "rect",
+        "--session",
+        str(session_path),
+        "--x",
+        "10",
+        "--y",
+        "10",
+        "--width",
+        "50",
+        "--height",
+        "30",
+        "--label",
+        "box",
+        env=env,
+    )
+    assert draw_result.returncode == 0
+
+    result = run_cli(
+        "edit",
+        "rect",
+        "--session",
+        str(session_path),
+        "--label",
+        "box",
+        "--fill",
+        "#00FF00",
+        "--json",
+        env=env,
+    )
+
+    assert result.returncode == 0
+    scene = read_scene(session_path)
+    assert scene["objects"][0]["fill"] == "#00FF00"
+    assert scene["objects"][0]["label"] == "box"
+
+
+def test_edit_with_id_can_still_change_label(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+
+    draw_result = run_cli(
+        "draw",
+        "rect",
+        "--session",
+        str(session_path),
+        "--x",
+        "10",
+        "--y",
+        "10",
+        "--width",
+        "50",
+        "--height",
+        "30",
+        "--label",
+        "box",
+        env=env,
+    )
+    assert draw_result.returncode == 0
+
+    result = run_cli(
+        "edit",
+        "rect",
+        "--session",
+        str(session_path),
+        "--id",
+        "obj_000001",
+        "--label",
+        "renamed-box",
+        "--json",
+        env=env,
+    )
+
+    assert result.returncode == 0
+    scene = read_scene(session_path)
+    assert scene["objects"][0]["label"] == "renamed-box"
+
+
 def test_edit_requires_at_least_one_field(tmp_path: Path) -> None:
     session_path, env = create_cli_session(tmp_path)
 
@@ -184,7 +294,72 @@ def test_edit_requires_at_least_one_field(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     payload = json.loads(result.stdout)
+    assert set(payload) == {"error"}
     assert payload["error"] == "at least one field must be provided for edit"
+    assert result.stderr == ""
+
+
+def test_edit_requires_id_or_label_selector(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+
+    result = run_cli(
+        "edit",
+        "rect",
+        "--session",
+        str(session_path),
+        "--fill",
+        "#00FF00",
+        "--json",
+        env=env,
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert set(payload) == {"error"}
+    assert payload["error"] == "id or label must be provided for edit"
+    assert result.stderr == ""
+
+
+def test_edit_by_label_rejects_ambiguous_matches(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+
+    for x in ("10", "80"):
+        draw_result = run_cli(
+            "draw",
+            "rect",
+            "--session",
+            str(session_path),
+            "--x",
+            x,
+            "--y",
+            "10",
+            "--width",
+            "50",
+            "--height",
+            "30",
+            "--label",
+            "box",
+            env=env,
+        )
+        assert draw_result.returncode == 0
+
+    result = run_cli(
+        "edit",
+        "rect",
+        "--session",
+        str(session_path),
+        "--label",
+        "box",
+        "--fill",
+        "#00FF00",
+        "--json",
+        env=env,
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert set(payload) == {"error"}
+    assert payload["error"] == "label is ambiguous: box"
     assert result.stderr == ""
 
 
@@ -223,6 +398,58 @@ def test_delete_human_readable_output(tmp_path: Path) -> None:
     assert read_scene(session_path)["objects"] == []
 
 
+def test_delete_by_label_human_readable_output(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+
+    draw_result = run_cli(
+        "draw",
+        "text",
+        "--session",
+        str(session_path),
+        "--x",
+        "10",
+        "--y",
+        "15",
+        "--text",
+        "hello",
+        "--label",
+        "greeting",
+        env=env,
+    )
+    assert draw_result.returncode == 0
+
+    result = run_cli(
+        "delete",
+        "--session",
+        str(session_path),
+        "--label",
+        "greeting",
+        env=env,
+    )
+
+    assert result.returncode == 0
+    assert "Deleted object: obj_000001" in result.stdout
+    assert read_scene(session_path)["objects"] == []
+
+
+def test_delete_requires_id_or_label_selector(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+
+    result = run_cli(
+        "delete",
+        "--session",
+        str(session_path),
+        "--json",
+        env=env,
+    )
+
+    assert result.returncode == 1
+    payload = json.loads(result.stdout)
+    assert set(payload) == {"error"}
+    assert payload["error"] == "id or label must be provided for delete"
+    assert result.stderr == ""
+
+
 def test_undo_json_success_and_error_contract(tmp_path: Path) -> None:
     session_path, env = create_cli_session(tmp_path)
 
@@ -235,6 +462,7 @@ def test_undo_json_success_and_error_contract(tmp_path: Path) -> None:
     )
     assert empty_result.returncode == 1
     empty_payload = json.loads(empty_result.stdout)
+    assert set(empty_payload) == {"error"}
     assert "nothing to undo" in empty_payload["error"]
     assert empty_result.stderr == ""
 
@@ -267,6 +495,36 @@ def test_undo_json_success_and_error_contract(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["results"] == [{"op_id": "op_000002", "op": "undo", "object_id": None}]
     assert payload["scene_object_count"] == 0
+    assert read_scene(session_path)["objects"] == []
+
+
+def test_undo_after_run_batch_removes_the_whole_batch(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+
+    run_result = subprocess.run(
+        [sys.executable, "-m", "linework", "run", "--session", str(session_path), "--json"],
+        check=False,
+        capture_output=True,
+        text=True,
+        env={**os.environ, **env},
+        input=(
+            '{"op":"draw.rect","payload":{"x":10,"y":10,"width":50,"height":30}}\n'
+            '{"op":"draw.text","payload":{"x":20,"y":60,"text":"hi","size":14}}\n'
+        ),
+    )
+    assert run_result.returncode == 0
+
+    undo_result = run_cli(
+        "undo",
+        "--session",
+        str(session_path),
+        "--json",
+        env=env,
+    )
+
+    assert undo_result.returncode == 0
+    undo_payload = json.loads(undo_result.stdout)
+    assert undo_payload["scene_object_count"] == 0
     assert read_scene(session_path)["objects"] == []
 
 
@@ -455,5 +713,6 @@ def test_export_fails_when_session_image_asset_is_missing(tmp_path: Path) -> Non
 
     assert result.returncode == 1
     payload = json.loads(result.stdout)
+    assert set(payload) == {"error"}
     assert payload["error"] == "image asset missing: assets/missing.png"
     assert result.stderr == ""

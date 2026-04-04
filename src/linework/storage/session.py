@@ -12,7 +12,7 @@ from PIL import Image, UnidentifiedImageError
 
 from linework.config import sessions_root
 from linework.constants import HEX_COLOR
-from linework.core.commands import normalize_command
+from linework.core.commands import next_batch_id, normalize_command
 from linework.core.errors import SceneEngineError
 from linework.core.objects import resolve_asset_path
 from linework.core.scene import derive_scene
@@ -455,6 +455,41 @@ def serialize_commands(commands: list[CommandRecord]) -> str:
     return "\n".join(json.dumps(command.to_dict()) for command in commands) + "\n"
 
 
+def _derive_scene_snapshot(
+    *,
+    metadata: SessionMetadata,
+    commands: list[CommandRecord],
+    session_path: Path,
+) -> SceneSnapshot:
+    """Derive the current scene snapshot for a command list."""
+    return derive_scene(
+        canvas=metadata.canvas,
+        commands=commands,
+        session_path=session_path,
+        session_id=metadata.session_id,
+    )
+
+
+def _build_batch_result(
+    *,
+    metadata: SessionMetadata,
+    commands: list[CommandRecord],
+    results: list[dict[str, object]],
+    failed: dict[str, str] | None,
+    session_path: Path,
+) -> BatchResult:
+    """Build a batch result from the current session state."""
+    scene = _derive_scene_snapshot(metadata=metadata, commands=commands, session_path=session_path)
+    return BatchResult(
+        applied=len(results),
+        failed=failed,
+        results=results,
+        session_path=str(session_path),
+        scene_object_count=len(scene.objects),
+        latest_render=str(session_path / metadata.paths.latest_render),
+    )
+
+
 def inspect_session(session_path: str | Path) -> InspectResult:
     """Read and return the current session state for inspection."""
     resolved = Path(session_path).expanduser().resolve()
@@ -512,6 +547,7 @@ def apply_batch(
     with writer_lock(resolved):
         metadata = read_session_metadata(resolved)
         commands = read_commands(resolved)
+        batch_id = next_batch_id(commands)
 
         for entry in operations:
             op = entry.get("op")
@@ -529,8 +565,9 @@ def apply_batch(
                     payload=payload,
                     existing_commands=commands,
                     session_path=resolved,
+                    batch_id=batch_id,
                 )
-            except Exception as exc:
+            except (OSError, SceneEngineError) as exc:
                 failed = {"op": op, "error": str(exc)}
                 break
 
@@ -544,49 +581,16 @@ def apply_batch(
                 }
             )
 
-        if not results and failed is not None:
-            # Nothing applied, nothing to write.
-            return BatchResult(
-                applied=0,
-                failed=failed,
-                results=[],
-                session_path=str(resolved),
-                scene_object_count=len(
-                    derive_scene(
-                        canvas=metadata.canvas,
-                        commands=commands,
-                        session_path=resolved,
-                        session_id=metadata.session_id,
-                    ).objects
-                ),
-                latest_render=str(resolved / metadata.paths.latest_render),
-            )
-
         if not results:
-            # Empty input — nothing to do.
-            return BatchResult(
-                applied=0,
-                failed=None,
+            return _build_batch_result(
+                metadata=metadata,
+                commands=commands,
                 results=[],
-                session_path=str(resolved),
-                scene_object_count=len(
-                    derive_scene(
-                        canvas=metadata.canvas,
-                        commands=commands,
-                        session_path=resolved,
-                        session_id=metadata.session_id,
-                    ).objects
-                ),
-                latest_render=str(resolved / metadata.paths.latest_render),
+                failed=failed,
+                session_path=resolved,
             )
 
-        # Derive scene and write once.
-        scene = derive_scene(
-            canvas=metadata.canvas,
-            commands=commands,
-            session_path=resolved,
-            session_id=metadata.session_id,
-        )
+        scene = _derive_scene_snapshot(metadata=metadata, commands=commands, session_path=resolved)
         last_command = commands[-1]
         updated_metadata = SessionMetadata(
             schema_version=metadata.schema_version,

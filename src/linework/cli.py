@@ -9,6 +9,11 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from linework.bootstrap import BOOTSTRAP_TEXT
+from linework.constants import (
+    DEFAULT_CANVAS_BACKGROUND,
+    DEFAULT_CANVAS_HEIGHT,
+    DEFAULT_CANVAS_WIDTH,
+)
 from linework.core.errors import SceneEngineError
 from linework.storage.lock import SessionLockedError
 from linework.storage.models import CreatedSession, MutationResult
@@ -24,11 +29,89 @@ from linework.storage.session import (
 from linework.watch import DEFAULT_INTERVAL_MS, WatchError, create_session_watcher, watch_session
 
 
+class _HelpFormatter(
+    argparse.ArgumentDefaultsHelpFormatter,
+    argparse.RawDescriptionHelpFormatter,
+):
+    """CLI help formatter with defaults and preserved example layout."""
+
+
+_TOP_LEVEL_EPILOG = """\
+Golden path:
+  linework new --name idea-board --json
+  linework run --session PATH --json < ops.jsonl
+  linework inspect --session PATH --json
+  linework edit rect --session PATH --id obj_000001 --fill #CCE5FF --json
+  linework watch --session PATH
+  linework export --session PATH --out out.png
+"""
+
+_NEW_EPILOG = f"""\
+Examples:
+  linework new --json
+  linework new --name idea-board --watch
+  linework new --width {DEFAULT_CANVAS_WIDTH} --height {DEFAULT_CANVAS_HEIGHT}
+"""
+
+_RUN_EPILOG = """\
+Examples:
+  linework run --session PATH --json < ops.jsonl
+  linework run --session PATH --file ops.jsonl
+
+JSONL input:
+  {"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100}}
+  {"op":"draw.polygon","payload":{"points":[[220,180],[300,120],[360,210]],"fill":"#FF6666"}}
+  {"op":"delete","payload":{"label":"note-box"}}
+"""
+
+_INSPECT_EPILOG = """\
+Examples:
+  linework inspect --session PATH
+  linework inspect --session PATH --json
+
+Use inspect before edit/delete to discover stable object IDs and labels.
+"""
+
+_DRAW_EPILOG = """\
+Examples:
+  linework draw rect --session PATH --x 50 --y 50 --width 200 --height 100 --fill #E8E8E8
+  linework draw polygon --session PATH --point 220,180 --point 300,120 --point 360,210
+"""
+
+_EDIT_EPILOG = """\
+Examples:
+  linework edit rect --session PATH --id obj_000001 --fill #CCE5FF
+  linework edit rect --session PATH --label note-box --fill #CCE5FF
+
+When --id is omitted, --label selects the target. Use --id when you need to
+change the object's label.
+"""
+
+_DELETE_EPILOG = """\
+Examples:
+  linework delete --session PATH --id obj_000001
+  linework delete --session PATH --label note-box
+"""
+
+_UNDO_EPILOG = """\
+Examples:
+  linework undo --session PATH
+
+Undo reverses the last action. A successful `linework run` batch undoes as one
+action.
+"""
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level argument parser."""
     parser = argparse.ArgumentParser(
         prog="linework",
-        description="Agent-first CLI sketch tool.",
+        description=(
+            "Agent-first CLI sketch tool. Use `linework run` for JSONL batches, "
+            "`inspect` to read the scene back, and `watch` for a read-only window."
+        ),
+        epilog=_TOP_LEVEL_EPILOG,
+        formatter_class=_HelpFormatter,
     )
     parser.add_argument(
         "--version",
@@ -38,14 +121,34 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command")
 
     # --- new ---
-    new_parser = subparsers.add_parser("new", help="Create a new linework session.")
+    new_parser = subparsers.add_parser(
+        "new",
+        help="Create a new linework session.",
+        description=(
+            "Create a new session directory with a blank render. The default canvas "
+            f"is {DEFAULT_CANVAS_WIDTH}x{DEFAULT_CANVAS_HEIGHT} with a "
+            f"{DEFAULT_CANVAS_BACKGROUND} background."
+        ),
+        epilog=_NEW_EPILOG,
+        formatter_class=_HelpFormatter,
+    )
     new_parser.add_argument("--session", help="Explicit session directory path.")
     new_parser.add_argument("--name", help="Human-readable session name.")
-    new_parser.add_argument("--width", type=int, default=1200, help="Canvas width in pixels.")
-    new_parser.add_argument("--height", type=int, default=800, help="Canvas height in pixels.")
+    new_parser.add_argument(
+        "--width",
+        type=int,
+        default=DEFAULT_CANVAS_WIDTH,
+        help="Canvas width in pixels.",
+    )
+    new_parser.add_argument(
+        "--height",
+        type=int,
+        default=DEFAULT_CANVAS_HEIGHT,
+        help="Canvas height in pixels.",
+    )
     new_parser.add_argument(
         "--background",
-        default="#FFFFFF",
+        default=DEFAULT_CANVAS_BACKGROUND,
         help="Canvas background color in #RRGGBB or #RRGGBBAA form.",
     )
     new_parser.add_argument(
@@ -56,24 +159,54 @@ def build_parser() -> argparse.ArgumentParser:
     new_parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
     # --- run ---
-    run_parser = subparsers.add_parser("run", help="Apply JSONL operations (primary interface).")
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Apply JSONL operations (primary interface).",
+        description=(
+            "Apply JSONL operations to an existing session. Operations run in order, "
+            "stop on first failure, and render once at the end."
+        ),
+        epilog=_RUN_EPILOG,
+        formatter_class=_HelpFormatter,
+    )
     run_parser.add_argument("--session", required=True, help="Session directory path.")
     run_parser.add_argument("--file", help="Read JSONL from a file instead of stdin.")
     run_parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
     # --- inspect ---
-    inspect_parser = subparsers.add_parser("inspect", help="Read current scene state.")
+    inspect_parser = subparsers.add_parser(
+        "inspect",
+        help="Read current scene state.",
+        description="Read the current scene state and object table for a session.",
+        epilog=_INSPECT_EPILOG,
+        formatter_class=_HelpFormatter,
+    )
     inspect_parser.add_argument("--session", required=True, help="Session directory path.")
     inspect_parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
     # --- export ---
-    export_parser = subparsers.add_parser("export", help="Export PNG to a path.")
+    export_parser = subparsers.add_parser(
+        "export",
+        help="Export PNG to a path.",
+        description="Render the current scene to a PNG at a user-chosen path.",
+        epilog="Example:\n  linework export --session PATH --out out.png\n",
+        formatter_class=_HelpFormatter,
+    )
     export_parser.add_argument("--session", required=True, help="Session directory path.")
     export_parser.add_argument("--out", required=True, help="Output PNG path.")
     export_parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
     # --- watch ---
-    watch_parser = subparsers.add_parser("watch", help="Open a read-only watcher window.")
+    watch_parser = subparsers.add_parser(
+        "watch",
+        help="Open a read-only watcher window.",
+        description=(
+            "Open a read-only watcher window for an existing session. The watcher "
+            "polls render/latest.png and never mutates session state."
+        ),
+        epilog="Example:\n  linework watch --session PATH --interval-ms 250\n",
+        formatter_class=_HelpFormatter,
+    )
     _add_session_argument(watch_parser)
     watch_parser.add_argument(
         "--interval-ms",
@@ -83,33 +216,65 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # --- draw ---
-    draw_parser = subparsers.add_parser("draw", help="Create a single object (convenience).")
+    draw_parser = subparsers.add_parser(
+        "draw",
+        help="Create a single object (convenience).",
+        description="Create one object without writing JSONL by hand.",
+        epilog=_DRAW_EPILOG,
+        formatter_class=_HelpFormatter,
+    )
     draw_subparsers = draw_parser.add_subparsers(dest="draw_type", required=True)
     _add_draw_line_parser(draw_subparsers)
     _add_draw_rect_like_parser(draw_subparsers, name="rect")
     _add_draw_rect_like_parser(draw_subparsers, name="ellipse")
     _add_draw_polyline_parser(draw_subparsers)
+    _add_draw_polygon_parser(draw_subparsers)
     _add_draw_text_parser(draw_subparsers)
     _add_draw_image_parser(draw_subparsers)
 
     # --- edit ---
-    edit_parser = subparsers.add_parser("edit", help="Modify a single object (convenience).")
+    edit_parser = subparsers.add_parser(
+        "edit",
+        help="Modify a single object (convenience).",
+        description=(
+            "Modify one existing object. Use `inspect` first to discover object IDs and labels."
+        ),
+        epilog=_EDIT_EPILOG,
+        formatter_class=_HelpFormatter,
+    )
     edit_subparsers = edit_parser.add_subparsers(dest="edit_type", required=True)
     _add_edit_line_parser(edit_subparsers)
     _add_edit_rect_like_parser(edit_subparsers, name="rect")
     _add_edit_rect_like_parser(edit_subparsers, name="ellipse")
     _add_edit_polyline_parser(edit_subparsers)
+    _add_edit_polygon_parser(edit_subparsers)
     _add_edit_text_parser(edit_subparsers)
     _add_edit_image_parser(edit_subparsers)
 
     # --- delete ---
-    delete_parser = subparsers.add_parser("delete", help="Delete a single object.")
+    delete_parser = subparsers.add_parser(
+        "delete",
+        help="Delete a single object.",
+        description="Delete one object by stable ID or unique live label.",
+        epilog=_DELETE_EPILOG,
+        formatter_class=_HelpFormatter,
+    )
     _add_session_argument(delete_parser)
-    delete_parser.add_argument("--id", required=True, help="Stable object identifier.")
+    delete_parser.add_argument("--id", help="Stable object identifier.")
+    delete_parser.add_argument(
+        "--label",
+        help="Unique live object label to delete when --id is omitted.",
+    )
     _add_json_argument(delete_parser)
 
     # --- undo ---
-    undo_parser = subparsers.add_parser("undo", help="Undo the most recent mutation.")
+    undo_parser = subparsers.add_parser(
+        "undo",
+        help="Undo the most recent action.",
+        description="Undo the most recent action for a session.",
+        epilog=_UNDO_EPILOG,
+        formatter_class=_HelpFormatter,
+    )
     _add_session_argument(undo_parser)
     _add_json_argument(undo_parser)
 
@@ -211,8 +376,15 @@ def _add_stroke_width_argument(parser: argparse.ArgumentParser) -> None:
 def _add_edit_common_arguments(parser: argparse.ArgumentParser) -> None:
     """Add shared optional fields for edit commands."""
     _add_session_argument(parser)
-    parser.add_argument("--id", required=True, help="Stable object identifier.")
-    _add_label_argument(parser)
+    parser.add_argument(
+        "--id",
+        help="Stable object identifier. When omitted, --label selects the target object.",
+    )
+    parser.add_argument(
+        "--label",
+        help="When --id is provided, set the object label. When --id is omitted, "
+        "select the target by its unique live label.",
+    )
     _add_visible_argument(parser)
     _add_json_argument(parser)
 
@@ -278,7 +450,7 @@ def _parse_point(value: str) -> list[float]:
 
 def _add_draw_line_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Add the ``linework draw line`` parser."""
-    parser = subparsers.add_parser("line", help="Draw a line.")
+    parser = subparsers.add_parser("line", help="Draw a line.", formatter_class=_HelpFormatter)
     _add_session_argument(parser)
     _add_line_geometry(parser, required=True)
     _add_label_argument(parser)
@@ -292,7 +464,12 @@ def _add_draw_rect_like_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser], *, name: str
 ) -> None:
     """Add a draw parser for rect-like objects."""
-    parser = subparsers.add_parser(name, help=f"Draw a {name}.")
+    article = "an" if name == "ellipse" else "a"
+    parser = subparsers.add_parser(
+        name,
+        help=f"Draw {article} {name}.",
+        formatter_class=_HelpFormatter,
+    )
     _add_session_argument(parser)
     _add_rect_like_geometry(parser, required=True)
     _add_label_argument(parser)
@@ -307,7 +484,11 @@ def _add_draw_polyline_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
     """Add the ``linework draw polyline`` parser."""
-    parser = subparsers.add_parser("polyline", help="Draw a polyline.")
+    parser = subparsers.add_parser(
+        "polyline",
+        help="Draw a polyline.",
+        formatter_class=_HelpFormatter,
+    )
     _add_session_argument(parser)
     _add_polyline_points(parser, required=True)
     _add_label_argument(parser)
@@ -317,9 +498,32 @@ def _add_draw_polyline_parser(
     _add_json_argument(parser)
 
 
+def _add_draw_polygon_parser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Add the ``linework draw polygon`` parser."""
+    parser = subparsers.add_parser(
+        "polygon",
+        help="Draw a filled polygon.",
+        formatter_class=_HelpFormatter,
+    )
+    _add_session_argument(parser)
+    _add_polyline_points(parser, required=True)
+    _add_label_argument(parser)
+    _add_visible_argument(parser)
+    _add_stroke_argument(parser)
+    _add_fill_argument(parser)
+    _add_stroke_width_argument(parser)
+    _add_json_argument(parser)
+
+
 def _add_draw_text_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Add the ``linework draw text`` parser."""
-    parser = subparsers.add_parser("text", help="Draw a text label.")
+    parser = subparsers.add_parser(
+        "text",
+        help="Draw a text label.",
+        formatter_class=_HelpFormatter,
+    )
     _add_session_argument(parser)
     _add_text_geometry(parser, required=True)
     parser.add_argument("--size", type=float, help="Text size in pixels.")
@@ -331,7 +535,11 @@ def _add_draw_text_parser(subparsers: argparse._SubParsersAction[argparse.Argume
 
 def _add_draw_image_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Add the ``linework draw image`` parser."""
-    parser = subparsers.add_parser("image", help="Draw an imported image.")
+    parser = subparsers.add_parser(
+        "image",
+        help="Draw an imported image.",
+        formatter_class=_HelpFormatter,
+    )
     _add_session_argument(parser)
     parser.add_argument("--source", required=True, help="Path to the source image file.")
     parser.add_argument("--x", type=float, required=True, help="Top-left x coordinate.")
@@ -345,7 +553,7 @@ def _add_draw_image_parser(subparsers: argparse._SubParsersAction[argparse.Argum
 
 def _add_edit_line_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Add the ``linework edit line`` parser."""
-    parser = subparsers.add_parser("line", help="Edit a line.")
+    parser = subparsers.add_parser("line", help="Edit a line.", formatter_class=_HelpFormatter)
     _add_edit_common_arguments(parser)
     _add_line_geometry(parser, required=False)
     _add_stroke_argument(parser)
@@ -356,7 +564,12 @@ def _add_edit_rect_like_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser], *, name: str
 ) -> None:
     """Add an edit parser for rect-like objects."""
-    parser = subparsers.add_parser(name, help=f"Edit a {name}.")
+    article = "an" if name == "ellipse" else "a"
+    parser = subparsers.add_parser(
+        name,
+        help=f"Edit {article} {name}.",
+        formatter_class=_HelpFormatter,
+    )
     _add_edit_common_arguments(parser)
     _add_rect_like_geometry(parser, required=False)
     _add_stroke_argument(parser)
@@ -368,16 +581,40 @@ def _add_edit_polyline_parser(
     subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
 ) -> None:
     """Add the ``linework edit polyline`` parser."""
-    parser = subparsers.add_parser("polyline", help="Edit a polyline.")
+    parser = subparsers.add_parser(
+        "polyline",
+        help="Edit a polyline.",
+        formatter_class=_HelpFormatter,
+    )
     _add_edit_common_arguments(parser)
     _add_polyline_points(parser, required=False)
     _add_stroke_argument(parser)
     _add_stroke_width_argument(parser)
 
 
+def _add_edit_polygon_parser(
+    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    """Add the ``linework edit polygon`` parser."""
+    parser = subparsers.add_parser(
+        "polygon",
+        help="Edit a polygon.",
+        formatter_class=_HelpFormatter,
+    )
+    _add_edit_common_arguments(parser)
+    _add_polyline_points(parser, required=False)
+    _add_stroke_argument(parser)
+    _add_fill_argument(parser)
+    _add_stroke_width_argument(parser)
+
+
 def _add_edit_text_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Add the ``linework edit text`` parser."""
-    parser = subparsers.add_parser("text", help="Edit a text object.")
+    parser = subparsers.add_parser(
+        "text",
+        help="Edit a text object.",
+        formatter_class=_HelpFormatter,
+    )
     _add_edit_common_arguments(parser)
     _add_text_geometry(parser, required=False)
     parser.add_argument("--size", type=float, help="Text size in pixels.")
@@ -386,7 +623,11 @@ def _add_edit_text_parser(subparsers: argparse._SubParsersAction[argparse.Argume
 
 def _add_edit_image_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Add the ``linework edit image`` parser."""
-    parser = subparsers.add_parser("image", help="Edit an image object.")
+    parser = subparsers.add_parser(
+        "image",
+        help="Edit an image object.",
+        formatter_class=_HelpFormatter,
+    )
     _add_edit_common_arguments(parser)
     _add_rect_like_geometry(parser, required=False)
 
@@ -434,6 +675,19 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
         _include_optional_values(payload, args, "label", "visible", "stroke", "stroke_width")
         return payload
 
+    if draw_type == "polygon":
+        payload = {"points": args.points}
+        _include_optional_values(
+            payload,
+            args,
+            "label",
+            "visible",
+            "stroke",
+            "fill",
+            "stroke_width",
+        )
+        return payload
+
     if draw_type == "text":
         payload = {"x": args.x, "y": args.y, "text": args.text}
         _include_optional_values(payload, args, "size", "label", "visible", "fill")
@@ -449,7 +703,13 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
 
 def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
     """Build a convenience edit payload from CLI arguments."""
-    payload: dict[str, object] = {"id": args.id}
+    payload: dict[str, object] = {}
+    if args.id is not None:
+        payload["id"] = args.id
+    elif args.label is not None:
+        payload["label"] = args.label
+    else:
+        raise ValueError("id or label must be provided for edit")
     edit_type = args.edit_type
 
     if edit_type == "line":
@@ -490,6 +750,18 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
         )
         if args.points is not None:
             payload["points"] = args.points
+    elif edit_type == "polygon":
+        _include_optional_values(
+            payload,
+            args,
+            "label",
+            "visible",
+            "stroke",
+            "fill",
+            "stroke_width",
+        )
+        if args.points is not None:
+            payload["points"] = args.points
     elif edit_type == "text":
         _include_optional_values(
             payload,
@@ -519,6 +791,15 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
     if len(payload) == 1:
         raise ValueError("at least one field must be provided for edit")
     return payload
+
+
+def _build_delete_payload(args: argparse.Namespace) -> dict[str, object]:
+    """Build a convenience delete payload from CLI arguments."""
+    if args.id is not None:
+        return {"id": args.id}
+    if args.label is not None:
+        return {"label": args.label}
+    raise ValueError("id or label must be provided for delete")
 
 
 def _single_operation_payload(result: MutationResult) -> dict[str, object]:
@@ -604,7 +885,7 @@ def _delete_summary(result: MutationResult) -> str:
 
 def _undo_summary(result: MutationResult) -> str:
     """Format human-readable output for undo."""
-    return "Undid last command"
+    return "Undid last action"
 
 
 # ---------------------------------------------------------------------------
@@ -633,12 +914,10 @@ def cmd_new(args: argparse.Namespace) -> int:
             )
         except (OSError, SessionError, WatchError) as exc:
             if args.json:
-                payload = {"error": str(exc), **result.to_dict()}
-                print(json.dumps(payload, indent=2))
+                return _error(f"{exc}; session created at {result.session_path}", use_json=True)
             else:
                 _emit_created_session_result(result, use_json=False)
                 return _error(str(exc), use_json=False)
-            return 1
 
         _emit_created_session_result(result, use_json=args.json)
         watcher.run()
@@ -752,6 +1031,10 @@ def _format_geometry(obj: dict[str, object]) -> str:
         points = obj.get("points")
         count = len(points) if isinstance(points, list) else 0
         return f"{count} points"
+    if obj_type == "polygon":
+        points = obj.get("points")
+        count = len(points) if isinstance(points, list) else 0
+        return f"{count} points (closed)"
     return ""
 
 
@@ -838,10 +1121,14 @@ def cmd_edit(args: argparse.Namespace) -> int:
 
 def cmd_delete(args: argparse.Namespace) -> int:
     """Handle ``linework delete``."""
+    try:
+        payload = _build_delete_payload(args)
+    except ValueError as exc:
+        return _error(str(exc), use_json=args.json)
     return _apply_single_operation(
         session=args.session,
         op="delete",
-        payload={"id": args.id},
+        payload=payload,
         use_json=args.json,
         summary=_delete_summary,
     )

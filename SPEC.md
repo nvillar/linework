@@ -92,13 +92,14 @@ The bundled font becomes part of the rendering contract for the MVP.
   - rectangle
   - ellipse
   - polyline
+  - polygon
   - text
   - image placement
-- Object mutation by stable ID
+- Object mutation by stable ID or unique live label
 - Object labels as metadata
 - Object visibility
 - Delete
-- Whole-command undo
+- Whole-action undo
 - JSONL batch mode as the primary agent interface
 - Read-only watcher window
 - Session portability
@@ -265,7 +266,7 @@ Normative structure:
   "created_at": "2026-04-03T17:15:30Z",
   "updated_at": "2026-04-03T17:16:02Z",
   "canvas": {
-    "width": 1200,
+    "width": 800,
     "height": 800,
     "background": "#FFFFFF"
   },
@@ -293,7 +294,7 @@ Normative structure:
   "schema_version": 1,
   "session_id": "20260403-101530-idea-board",
   "canvas": {
-    "width": 1200,
+    "width": 800,
     "height": 800,
     "background": "#FFFFFF"
   },
@@ -316,6 +317,10 @@ Each entry must include at least:
 - `timestamp`
 - `op`
 - `payload`
+
+Entries created by `linework run` may additionally include `batch_id`. All
+successful operations from one batch share the same `batch_id` so a later
+`undo` can reverse the whole batch as one action.
 
 Normative structure:
 
@@ -424,6 +429,8 @@ The bootstrap output must explain:
 - what `linework` is
 - the session model
 - the JSONL batch workflow as the primary interface
+- the default canvas size and background
+- the inspect → edit/delete workflow for discovering IDs and labels
 - the core commands
 - an end-to-end agent example from session creation through JSONL batch to rendered PNG
 - how to discover more help
@@ -441,7 +448,7 @@ Behavior:
 
 Required semantics:
 
-- default canvas size: `1200x800`
+- default canvas size: `800x800`
 - default background: `#FFFFFF`
 - `--watch` opens the watcher after session creation
 
@@ -468,6 +475,7 @@ Behavior:
 - stops on first failure
 - prior successful operations remain committed
 - renders `render/latest.png` once after the last successful operation in the batch
+- a later `undo` reverses the successful portion of that batch as one action
 
 Each input line must be a JSON object with `op` and `payload` fields:
 
@@ -547,7 +555,7 @@ The object table must include:
 {
   "session_path": "/path/to/session",
   "session_id": "20260403-101530-idea-board",
-  "canvas": {"width": 1200, "height": 800, "background": "#FFFFFF"},
+  "canvas": {"width": 800, "height": 800, "background": "#FFFFFF"},
   "object_count": 2,
   "latest_render": "/path/to/session/render/latest.png",
   "objects": [
@@ -604,12 +612,14 @@ Primitive subcommands:
 - `linework draw rect`
 - `linework draw ellipse`
 - `linework draw polyline`
+- `linework draw polygon`
 - `linework draw text`
 - `linework draw image`
 
 ### 9.8 `linework edit`
 
-Convenience command for modifying a single existing object by stable ID.
+Convenience command for modifying a single existing object by stable ID or
+unique live label.
 
 Primitive subcommands:
 
@@ -617,6 +627,7 @@ Primitive subcommands:
 - `linework edit rect`
 - `linework edit ellipse`
 - `linework edit polyline`
+- `linework edit polygon`
 - `linework edit text`
 - `linework edit image`
 
@@ -626,22 +637,24 @@ Edits must not change stacking order.
 
 ### 9.9 `linework delete`
 
-Convenience command for deleting a single object by stable object ID.
+Convenience command for deleting a single object by stable object ID or unique
+live label.
 
 Behavior:
 
 - requires `--session PATH`
-- requires `--id OBJ_ID`
+- requires `--id OBJ_ID` or `--label LABEL`
 - removes the object from current scene state
 - preserves recoverability through command history and undo
 
 ### 9.10 `linework undo`
 
-Convenience command for undoing the most recent mutating command.
+Convenience command for undoing the most recent action.
 
 Behavior:
 
-- whole-command undo only
+- whole-action undo
+- a successful `linework run` batch undoes as one action
 - implemented through append-only history semantics
 - updates `scene.json`
 - re-renders `render/latest.png`
@@ -654,6 +667,7 @@ The convenience primitive commands must use these parameter names:
 - `linework draw rect --session PATH --x N --y N --width N --height N`
 - `linework draw ellipse --session PATH --x N --y N --width N --height N`
 - `linework draw polyline --session PATH --point X,Y --point X,Y ...`
+- `linework draw polygon --session PATH --point X,Y --point X,Y --point X,Y ...`
 - `linework draw text --session PATH --x N --y N --text STRING`
 - `linework draw image --session PATH --source PATH --x N --y N`
 
@@ -665,7 +679,12 @@ Create commands may also accept:
 
 Edit commands must use the same field names and additionally require:
 
-- `--id OBJ_ID`
+- `--id OBJ_ID`, or
+- a unique live `label` selector when `id` is omitted
+
+When `linework edit` omits `id`, the `label` field acts as the selector rather
+than a metadata update. Callers must use `id` when they need to change the
+object's label.
 
 `linework edit image` may update geometry, label, visibility, and other common editable fields, but image source replacement is not required in the MVP.
 
@@ -700,8 +719,10 @@ Default object semantics:
 Labels are optional human-oriented metadata.
 
 - Labels may be set during create or edit.
-- Labels are not used as mutation selectors in the MVP.
-- Mutating commands target objects by `--id` only.
+- `delete` may target a unique live label instead of an ID.
+- `edit.*` may target a unique live label when `id` is omitted.
+- If multiple live objects share a label, label-based selection must fail and
+  require `id` for disambiguation.
 
 ### 10.3 Coordinates and units
 
@@ -811,7 +832,36 @@ Style fields:
 - `stroke`
 - `stroke_width`
 
-### 11.5 Text
+### 11.5 Polygon
+
+Type: `polygon`
+
+Geometry field:
+
+- `points`
+
+Point representation:
+
+```json
+[[10.0, 20.0], [30.0, 40.0], [50.0, 60.0]]
+```
+
+CLI point input:
+
+- repeated `--point x,y` flags
+
+Polygon behavior:
+
+- the path closes automatically
+- at least three points are required
+
+Style fields:
+
+- `stroke`
+- `fill`
+- `stroke_width`
+
+### 11.6 Text
 
 Type: `text`
 
@@ -833,7 +883,7 @@ Text behavior:
 - no alignment controls
 - no rich text
 
-### 11.6 Image
+### 11.7 Image
 
 Type: `image`
 
@@ -870,12 +920,14 @@ It is batch-oriented, not a persistent daemon protocol.
 - `draw.rect`
 - `draw.ellipse`
 - `draw.polyline`
+- `draw.polygon`
 - `draw.text`
 - `draw.image`
 - `edit.line`
 - `edit.rect`
 - `edit.ellipse`
 - `edit.polyline`
+- `edit.polygon`
 - `edit.text`
 - `edit.image`
 - `delete`
@@ -887,13 +939,17 @@ Each input line is a JSON object with `op` and `payload` fields:
 
 ```json
 {"op":"draw.rect","payload":{"x":80.0,"y":120.0,"width":300.0,"height":180.0,"stroke":"#000000","fill":"#EEEEEE","stroke_width":2.0,"label":"api-box"}}
+{"op":"draw.polygon","payload":{"points":[[380.0,120.0],[520.0,60.0],[620.0,160.0]],"fill":"#FF6666","stroke":"#AA3333","label":"roof"}}
 {"op":"draw.text","payload":{"x":100.0,"y":160.0,"text":"API flow","size":28.0,"fill":"#000000"}}
 {"op":"edit.rect","payload":{"id":"obj_000001","fill":"#CCCCCC"}}
-{"op":"delete","payload":{"id":"obj_000002"}}
+{"op":"delete","payload":{"label":"api-box"}}
 {"op":"undo","payload":{}}
 ```
 
-If callers omit object IDs for draw operations, `linework` generates sequential IDs. The assigned IDs are returned in the results and recorded in the canonical command log.
+If callers omit object IDs for draw operations, `linework` generates sequential
+IDs. The assigned IDs are returned in the results and recorded in the canonical
+command log. `delete` may target a unique live label instead of an ID. For
+`edit.*`, omitting `id` makes the `label` field act as the selector.
 
 ### 12.3 Output format
 
@@ -902,10 +958,13 @@ See §9.3 for the full `linework run --json` output specification.
 ### 12.4 End-to-end agent example
 
 ```bash
-# 1. Create a session
-SESSION=$(linework new --json | python -c "import sys,json; print(json.load(sys.stdin)['session_path'])")
+# 1. Create a session and note the returned session_path
+linework new --name idea-board --json
 
-# 2. Draw a diagram via JSONL batch
+# 2. Reuse that session path in later commands
+SESSION=/path/to/session
+
+# 3. Draw a diagram via JSONL batch
 cat <<'EOF' | linework run --session "$SESSION" --json
 {"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","label":"server"}}
 {"op":"draw.text","payload":{"x":100,"y":90,"text":"Server","size":20}}
@@ -914,10 +973,10 @@ cat <<'EOF' | linework run --session "$SESSION" --json
 {"op":"draw.line","payload":{"x1":250,"y1":100,"x2":350,"y2":100,"stroke":"#333333","stroke_width":3}}
 EOF
 
-# 3. Inspect the result
+# 4. Inspect the result and discover IDs/labels before editing
 linework inspect --session "$SESSION" --json
 
-# 4. Export to a shareable PNG
+# 5. Export to a shareable PNG
 linework export --session "$SESSION" --out ./diagram.png
 ```
 
@@ -955,7 +1014,7 @@ The canvas background is a session-level property.
 
 Defaults:
 
-- width: `1200`
+- width: `800`
 - height: `800`
 - background: `#FFFFFF`
 

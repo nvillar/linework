@@ -53,11 +53,26 @@ def test_module_entry_point_prints_bootstrap() -> None:
     assert result.stderr == ""
 
 
+def test_bootstrap_text_mentions_golden_path_and_polygon() -> None:
+    assert "Golden path:" in BOOTSTRAP_TEXT
+    assert '"draw.polygon"' in BOOTSTRAP_TEXT
+    assert "inspect --session PATH --json" in BOOTSTRAP_TEXT
+
+
 def test_version_flag_prints_package_version() -> None:
     result = run_cli("--version")
 
     assert result.returncode == 0
     assert result.stdout.strip() == "0.1.0"
+    assert result.stderr == ""
+
+
+def test_top_level_help_includes_golden_path() -> None:
+    result = run_cli("--help")
+
+    assert result.returncode == 0
+    assert "Golden path:" in result.stdout
+    assert "linework run --session PATH --json < ops.jsonl" in result.stdout
     assert result.stderr == ""
 
 
@@ -67,6 +82,7 @@ def test_new_help_advertises_watch_flag() -> None:
     assert result.returncode == 0
     assert "--watch" in result.stdout
     assert "--json" in result.stdout
+    assert "800x800" in result.stdout
     assert result.stderr == ""
 
 
@@ -76,6 +92,7 @@ def test_watch_help_lists_interval_flag() -> None:
     assert result.returncode == 0
     assert "--session" in result.stdout
     assert "--interval-ms" in result.stdout
+    assert "read-only watcher window" in result.stdout
     assert result.stderr == ""
 
 
@@ -116,7 +133,7 @@ def test_new_uses_explicit_session_path(tmp_path: Path) -> None:
     assert (session_path / "render" / "latest.png").is_file()
 
     with Image.open(session_path / "render" / "latest.png") as image:
-        assert image.size == (1200, 800)
+        assert image.size == (800, 800)
 
 
 def test_new_without_session_uses_linework_home(tmp_path: Path) -> None:
@@ -277,10 +294,13 @@ def test_new_watch_json_reports_session_when_watcher_fails(
 
     assert exit_code == 1
     payload = json.loads(captured.out)
-    assert payload["error"] == "tkinter is unavailable in the active Python environment"
-    assert payload["session_path"] == str(session_path)
-    assert payload["session_id"] == "watched-session"
-    assert Path(payload["latest_render"]).is_file()
+    assert payload == {
+        "error": (
+            "tkinter is unavailable in the active Python environment; "
+            f"session created at {session_path}"
+        )
+    }
+    assert (session_path / "render" / "latest.png").is_file()
     assert captured.err == ""
 
 

@@ -91,6 +91,16 @@ def render_object(
         )
         return
 
+    if object_type == "polygon":
+        points = points_value(object_data)
+        draw.polygon(
+            points,
+            outline=get_color(object_data.get("stroke"), default="#000000"),
+            fill=get_optional_color(object_data.get("fill")),
+            width=int(round(number_or_default(object_data, "stroke_width", 2.0))),
+        )
+        return
+
     if object_type == "text":
         font = load_default_text_font(number_or_default(object_data, "size", 16.0))
         draw.text(

@@ -9,6 +9,7 @@ import pytest
 from PIL import Image, ImageChops
 
 from linework.storage.session import (
+    apply_batch,
     apply_mutation,
     create_session,
     read_commands,
@@ -180,6 +181,134 @@ def test_renderer_supports_multiple_primitives(
         blank = Image.new("RGBA", rendered.size, (255, 255, 255, 255))
         difference = ImageChops.difference(rendered.convert("RGB"), blank.convert("RGB"))
         assert difference.getbbox() is not None
+
+
+def test_draw_polygon_renders_filled_shape(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from linework import config
+
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
+    session_path = create_test_session(tmp_path)
+
+    apply_mutation(
+        session_path,
+        op="draw.polygon",
+        payload={
+            "points": [[20, 80], [100, 20], [160, 100]],
+            "fill": "#FF66CC",
+            "stroke": "#AA2277",
+        },
+    )
+
+    scene = read_scene_snapshot(session_path)
+    assert scene.objects[0]["type"] == "polygon"
+    assert scene.objects[0]["fill"] == "#FF66CC"
+
+    with Image.open(session_path / "render" / "latest.png") as rendered:
+        assert rendered.getpixel((95, 60)) == (255, 102, 204, 255)
+
+
+def test_edit_and_delete_support_unique_label_selection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import config
+
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
+    session_path = create_test_session(tmp_path)
+
+    apply_mutation(
+        session_path,
+        op="draw.rect",
+        payload={"x": 10, "y": 10, "width": 50, "height": 40, "label": "box"},
+    )
+    apply_mutation(
+        session_path,
+        op="edit.rect",
+        payload={"label": "box", "fill": "#00FF00"},
+    )
+
+    scene = read_scene_snapshot(session_path)
+    assert scene.objects[0]["fill"] == "#00FF00"
+
+    apply_mutation(session_path, op="delete", payload={"label": "box"})
+    assert read_scene_snapshot(session_path).objects == []
+
+
+def test_label_selection_rejects_ambiguous_matches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import config
+    from linework.core.errors import CommandValidationError
+
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
+    session_path = create_test_session(tmp_path)
+
+    apply_mutation(
+        session_path,
+        op="draw.rect",
+        payload={"x": 10, "y": 10, "width": 50, "height": 40, "label": "box"},
+    )
+    apply_mutation(
+        session_path,
+        op="draw.rect",
+        payload={"x": 70, "y": 10, "width": 50, "height": 40, "label": "box"},
+    )
+
+    with pytest.raises(CommandValidationError, match="label is ambiguous: box"):
+        apply_mutation(session_path, op="delete", payload={"label": "box"})
+
+
+def test_undo_after_batch_removes_the_whole_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import config
+
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
+    session_path = create_test_session(tmp_path)
+
+    apply_batch(
+        session_path,
+        operations=[
+            {
+                "op": "draw.rect",
+                "payload": {"x": 10, "y": 10, "width": 50, "height": 40},
+            },
+            {
+                "op": "draw.text",
+                "payload": {"x": 20, "y": 60, "text": "hello", "size": 16},
+            },
+        ],
+    )
+    apply_mutation(session_path, op="undo")
+
+    assert read_scene_snapshot(session_path).objects == []
+
+
+def test_undo_inside_batch_only_removes_the_last_batch_operation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import config
+
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
+    session_path = create_test_session(tmp_path)
+
+    apply_batch(
+        session_path,
+        operations=[
+            {
+                "op": "draw.rect",
+                "payload": {"x": 10, "y": 10, "width": 50, "height": 40},
+            },
+            {
+                "op": "draw.text",
+                "payload": {"x": 20, "y": 60, "text": "hello", "size": 16},
+            },
+            {"op": "undo", "payload": {}},
+        ],
+    )
+
+    scene = read_scene_snapshot(session_path)
+    assert len(scene.objects) == 1
+    assert scene.objects[0]["type"] == "rect"
 
 
 def test_draw_image_uses_session_local_asset_and_natural_size(

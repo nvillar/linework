@@ -1,0 +1,1 @@
+{"schema_version": 1, "op_id": "op_000001", "timestamp": "2026-04-04T01:30:00Z", "op": "draw.polygon", "payload": {"points": [[20, 95], [80, 20], [140, 95]], "fill": "#FF66CC", "stroke": "#AA2277", "stroke_width": 3, "label": "triangle", "id": "obj_000001"}}

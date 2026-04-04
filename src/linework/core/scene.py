@@ -38,15 +38,48 @@ def derive_scene(
 
 def resolve_effective_commands(commands: Iterable[CommandRecord]) -> list[CommandRecord]:
     """Collapse append-only history into the effective command list."""
-    effective: list[CommandRecord] = []
+    effective_actions: list[tuple[str | None, list[CommandRecord]]] = []
     for command in commands:
         if command.op == "undo":
-            if not effective:
-                raise CommandValidationError("nothing to undo")
-            effective.pop()
+            _apply_undo(effective_actions=effective_actions, undo_batch_id=command.batch_id)
             continue
-        effective.append(command)
-    return effective
+        _append_effective_command(effective_actions=effective_actions, command=command)
+    return [item for _, commands_in_action in effective_actions for item in commands_in_action]
+
+
+def _append_effective_command(
+    *,
+    effective_actions: list[tuple[str | None, list[CommandRecord]]],
+    command: CommandRecord,
+) -> None:
+    """Append a non-undo command to the effective action stack."""
+    if (
+        command.batch_id is not None
+        and effective_actions
+        and effective_actions[-1][0] == command.batch_id
+    ):
+        effective_actions[-1][1].append(command)
+        return
+    effective_actions.append((command.batch_id, [command]))
+
+
+def _apply_undo(
+    *,
+    effective_actions: list[tuple[str | None, list[CommandRecord]]],
+    undo_batch_id: str | None,
+) -> None:
+    """Apply one undo command to the effective action stack."""
+    if not effective_actions:
+        raise CommandValidationError("nothing to undo")
+
+    top_batch_id, top_commands = effective_actions[-1]
+    if undo_batch_id is not None and top_batch_id == undo_batch_id:
+        top_commands.pop()
+        if not top_commands:
+            effective_actions.pop()
+        return
+
+    effective_actions.pop()
 
 
 def apply_effective_command(

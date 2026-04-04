@@ -1,33 +1,65 @@
 """Bootstrap help text for the top-level CLI."""
 
-BOOTSTRAP_TEXT = """\
+from linework.constants import (
+    DEFAULT_CANVAS_BACKGROUND,
+    DEFAULT_CANVAS_HEIGHT,
+    DEFAULT_CANVAS_WIDTH,
+)
+
+_DEFAULTS_LINE = (
+    f"Defaults: canvas {DEFAULT_CANVAS_WIDTH}x{DEFAULT_CANVAS_HEIGHT}, "
+    f"background {DEFAULT_CANVAS_BACKGROUND}. The watcher is read-only."
+)
+
+BOOTSTRAP_TEXT = f"""\
 linework: agent-first CLI sketch tool
 
-Linework is a non-interactive, session-based drawing tool. Every drawing lives in
-an explicit session directory. JSONL batch operations are the primary interface,
-with convenience commands for common single-object edits.
+Linework is a non-interactive, session-based drawing tool for fast sketches.
+Every drawing lives in an explicit session directory. JSONL batch operations are
+the primary interface, with convenience commands for common single-object edits.
+{_DEFAULTS_LINE}
 
-Quick start:
-  linework new --json                          # create a session
-  linework new --watch                         # create a session and open the watcher
-  linework run --session PATH --json < ops.jsonl  # draw via JSONL batch
-  linework draw rect --session PATH --x 50 --y 50 --width 200 --height 100 --json
-  linework draw image --session PATH --source ./diagram.png --x 40 --y 30 --json
-  linework watch --session PATH                # open the read-only watcher
-  linework inspect --session PATH --json       # read the scene back
-  linework export --session PATH --out out.png # get the PNG
+Golden path:
+  1. Create a session
+     linework new --name idea-board --json
 
-JSONL format (pipe to linework run --session PATH --json):
-  {"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","label":"box"}}
-  {"op":"draw.text","payload":{"x":80,"y":90,"text":"Hello","size":20,"fill":"#000000"}}
-  {"op":"draw.line","payload":{"x1":0,"y1":0,"x2":200,"y2":100,"stroke":"#333333"}}
-  {"op":"edit.rect","payload":{"id":"obj_000001","fill":"#CCCCCC"}}
-  {"op":"delete","payload":{"id":"obj_000002"}}
-  {"op":"undo","payload":{}}
+  2. Draw via JSONL batch (primary interface)
+     linework run --session PATH --json < ops.jsonl
 
-Primitives: line, rect, ellipse, polyline, text, image
+  3. Inspect the scene to discover IDs and labels before editing
+     linework inspect --session PATH --json
+
+  4. Edit or delete one object
+     linework edit rect --session PATH --id obj_000001 --fill #CCE5FF --json
+     linework delete --session PATH --label note-box --json
+
+  5. Watch or export
+     linework watch --session PATH
+     linework export --session PATH --out out.png
+
+JSONL reference (pipe to linework run --session PATH --json):
+  {{"op":"draw.line","payload":{{"x1":0,"y1":0,"x2":200,"y2":100}}}}
+  {{"op":"draw.rect","payload":{{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","label":"box"}}}}
+  {{"op":"draw.ellipse","payload":{{"x":280,"y":50,"width":120,"height":80,"fill":"#D9F2E6"}}}}
+  {{"op":"draw.polyline","payload":{{"points":[[20,180],[80,150],[140,210]],"stroke":"#333333"}}}}
+  {{"op":"draw.polygon","payload":{{"points":[[220,180],[300,120],[360,210]],"fill":"#FF6666"}}}}
+  {{"op":"draw.text","payload":{{"x":80,"y":90,"text":"Hello","size":20,"fill":"#000000"}}}}
+  {{"op":"draw.image","payload":{{"x":420,"y":40,"asset_path":"assets/reference.png"}}}}
+  {{"op":"edit.rect","payload":{{"id":"obj_000001","fill":"#CCCCCC"}}}}
+  {{"op":"delete","payload":{{"label":"box"}}}}
+  {{"op":"undo","payload":{{}}}}
+
+Primitives: line, rect, ellipse, polyline, polygon, text, image
 Operations: draw.*, edit.*, delete, undo
-IDs are auto-assigned if omitted from draw operations.
+IDs are auto-assigned if omitted from draw operations. Undo reverses the last
+action; a successful `linework run` batch undoes as one action.
+
+Selection:
+  - `inspect` is the read interface for finding object IDs and labels.
+  - `edit` and `delete` accept `--id`, and `delete` also accepts a unique label.
+  - JSONL `delete` accepts `label` instead of `id`.
+  - For `edit`, omitting `id` makes `label` act as the selector, so use `id` when
+    you need to relabel an object.
 
 Commands:
   linework new          Create a new session
@@ -35,8 +67,10 @@ Commands:
   linework inspect      Read current scene state
   linework export       Export PNG to a path
   linework watch        Open a read-only watcher window
-  linework draw         Draw a single object (line, rect, ellipse, polyline, text, image)
-  linework edit         Edit a single object (line, rect, ellipse, polyline, text, image)
+  linework draw         Draw a single object (line, rect, ellipse, polyline,
+                        polygon, text, image)
+  linework edit         Edit a single object (line, rect, ellipse, polyline,
+                        polygon, text, image)
   linework delete       Delete a single object (convenience)
   linework undo         Undo last operation (convenience)
 
