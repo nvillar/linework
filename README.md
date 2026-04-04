@@ -14,7 +14,7 @@ window** to see the drawing come together in real time.
 ## Prerequisites
 
 - **[uv](https://docs.astral.sh/uv/)** — Python package and project manager.
-- An **agent with terminal access** (e.g. Claude, GPT, Copilot).
+- An **agent with terminal access** (e.g. Copilot, Claude, Codex, or VS Code).
 
 ## Install
 
