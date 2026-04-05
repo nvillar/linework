@@ -23,12 +23,12 @@ window** to show the drawing come together in real time. The agent can also use
 
 On Windows:
 ```bash
-uv tool install linework --link-mode copy git+https://github.com/nvillar/linework.git
+uv tool install --link-mode copy git+https://github.com/nvillar/linework.git
 ```
 
 On macOS:
 ```bash
-uv tool install linework git+https://github.com/nvillar/linework.git
+uv tool install git+https://github.com/nvillar/linework.git
 ```
 
 To update check the linework version. If a new release is out, the command to update
