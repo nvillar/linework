@@ -145,6 +145,7 @@ def test_schema_command_outputs_compact_overview() -> None:
     assert "full manifest" in result.stdout
     assert "draw x1, y1, x2, y2 | optional label, visible, stroke, stroke_width" in result.stdout
     assert "arrowhead: end, start, both, none (default: end)" in result.stdout
+    assert "colors: #RRGGBB or #RRGGBBAA (alpha-composited in stacking order)" in result.stdout
     assert (
         "`edit.image` changes placement/size only; `asset_path` is fixed after creation"
         in result.stdout
@@ -161,6 +162,13 @@ def test_schema_command_outputs_machine_readable_manifest() -> None:
         "width": 800,
         "height": 800,
         "background": "#FFFFFF",
+    }
+    assert payload["color_format"] == {
+        "syntax": "#RRGGBB or #RRGGBBAA",
+        "compositing": (
+            "source-over alpha; translucent objects blend with"
+            " earlier scene content in creation order"
+        ),
     }
     assert payload["ops"]["draw.arrow"]["optional"]["arrow_size"]["type"] == "positive-number|null"
     assert payload["ops"]["draw.circle"]["required"]["radius"]["type"] == "positive-number"

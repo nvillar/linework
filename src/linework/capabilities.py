@@ -51,8 +51,9 @@ def _selector_spec(*, allow_label_only_note: str) -> dict[str, object]:
 
 _LABEL_FIELD = _field("string|null")
 _VISIBLE_FIELD = _field("boolean", default=True)
-_STROKE_FIELD = _field("color", default="#000000")
-_FILL_FIELD = _field("color|null")
+_COLOR_DESCRIPTION = "#RRGGBB or #RRGGBBAA; alpha-composited in stacking order"
+_STROKE_FIELD = _field("color", default="#000000", description=_COLOR_DESCRIPTION)
+_FILL_FIELD = _field("color|null", description=_COLOR_DESCRIPTION)
 _STROKE_WIDTH_FIELD = _field("positive-number", default=2.0)
 _TEXT_SIZE_FIELD = _field("positive-number", default=16.0)
 _TEXT_ANCHOR_FIELD = _field(
@@ -239,7 +240,11 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
             "size": _TEXT_SIZE_FIELD,
             "label": _LABEL_FIELD,
             "visible": _VISIBLE_FIELD,
-            "fill": _field("color|null", default="#000000"),
+            "fill": _field(
+                "color|null",
+                default="#000000",
+                description=_COLOR_DESCRIPTION,
+            ),
             "anchor": _TEXT_ANCHOR_FIELD,
             "max_width": _TEXT_MAX_WIDTH_FIELD,
         },
@@ -511,11 +516,18 @@ def unsupported_command_message(op: str) -> str:
 def schema_manifest() -> dict[str, object]:
     """Return a machine-readable manifest of supported operations."""
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "canvas_defaults": {
             "width": DEFAULT_CANVAS_WIDTH,
             "height": DEFAULT_CANVAS_HEIGHT,
             "background": DEFAULT_CANVAS_BACKGROUND,
+        },
+        "color_format": {
+            "syntax": "#RRGGBB or #RRGGBBAA",
+            "compositing": (
+                "source-over alpha; translucent objects blend with"
+                " earlier scene content in creation order"
+            ),
         },
         "ops": deepcopy(_OPERATION_SCHEMAS),
     }

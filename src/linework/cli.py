@@ -1535,6 +1535,7 @@ def cmd_schema(args: argparse.Namespace) -> int:
     print("  undo         no payload")
     print()
     print("Special values:")
+    print("  colors: #RRGGBB or #RRGGBBAA (alpha-composited in stacking order)")
     print(f"  arrowhead: {', '.join(ARROWHEAD_MODES)} (default: {ARROWHEAD_MODES[0]})")
     print(f"  anchor: {', '.join(TEXT_ANCHORS)} (default: {TEXT_ANCHORS[0]})")
     print()
