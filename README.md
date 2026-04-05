@@ -37,15 +37,16 @@ Or point your agent to this page and ask it to install `linework`.
 Give your agent a prompt like this:
 
 ```
-Use the `linework` cli to draw a self-portrait.
+Use the linework CLI to draw a self-portrait, and open a watch for me to follow along. 
 ```
 
-Or, if you want to be more explicit: 
+Or, more explicitly: 
 
 ```
 You have access to the `linework` CLI for creating drawings and diagrams.
-Run `linework` with no arguments to learn how it works. Start by creating a
-session, then draw a self-portrait.
+Run `linework` with no arguments to learn how it works.
+Start by creating a session, then draw a self-portrait.
+Open a watch for me to follow your progress.
 ```
 
 The agent will read the built-in bootstrap guide, create a session, and start
