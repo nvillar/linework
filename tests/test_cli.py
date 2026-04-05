@@ -74,8 +74,8 @@ def test_version_flag_prints_package_version() -> None:
     result = run_cli("--version")
 
     assert result.returncode == 0
-    version = result.stdout.strip()
-    assert version.startswith("0.")
+    lines = result.stdout.strip().splitlines()
+    assert lines[0].startswith("0.")
     assert result.stderr == ""
 
 

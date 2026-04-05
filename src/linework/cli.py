@@ -417,8 +417,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.version:
         from linework import __version__
+        from linework.update_check import check_for_update
 
         print(__version__)
+        hint = check_for_update(__version__)
+        if hint:
+            print(hint)
         return 0
 
     if args.command == "schema":
