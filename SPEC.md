@@ -812,6 +812,10 @@ The only supported color formats in the MVP are:
 - `#RRGGBB`
 - `#RRGGBBAA`
 
+When an alpha channel is present, rendering must use normal source-over alpha
+compositing. Translucent objects blend with the current scene content rather
+than overwriting earlier semi-transparent pixels.
+
 Named colors and other color syntaxes are out of scope.
 
 ### 10.5 Bounds
@@ -826,6 +830,7 @@ Objects must not be auto-clamped or auto-rejected merely for being partially or 
 
 - Creation order defines stacking order.
 - Earlier objects are behind later objects.
+- Later objects are alpha-composited over earlier objects using normal source-over semantics when transparency is present.
 - Edits do not change stacking order.
 - There are no explicit z-order commands in the MVP.
 

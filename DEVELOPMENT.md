@@ -18,6 +18,8 @@ development rules, workflow processes, and validation requirements.
 7. Watcher
 8. Hardening and regression harness
 9. Polish and test coverage
+10. Agent UX improvements
+11. Alpha compositing and transparency correctness
 
 Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interface (`run`), scene reader (`inspect`), and export are the primary agent workflow. The individual draw/edit/delete/undo subcommands are convenience wrappers and follow after.
 
@@ -116,9 +118,16 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - text `anchor` and `max_width` support
 - new agent UX regression fixture plus expanded CLI/render coverage
 
+#### Milestone 11: Alpha compositing and transparency correctness (complete)
+
+- per-object RGBA compositing for renderer-drawn objects in stacking order
+- correct blending for overlapping translucent primitives and text
+- targeted scene-engine coverage for transparency overlap behavior
+- spec and roadmap updates clarifying the delivered alpha-rendering contract
+
 ### Current implementation status
 
-Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10.
+Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11.
 
 Current user-facing command surface:
 
@@ -144,7 +153,7 @@ Internal engine capabilities:
 - watched session seeding via `linework new --file` / `linework new --stdin`
 - one-shot batch export via `linework run --out` with optional temporary width / height / background overrides
 - scene replay from command history
-- PNG rendering for all supported primitives
+- PNG rendering for all supported primitives with per-object alpha compositing for renderer-drawn objects
 - arrow rendering with configurable arrowhead placement and size
 - text anchor and width-based wrapping support
 - label-based selection for edit/delete with disambiguation on collisions
@@ -168,6 +177,7 @@ Implementation notes:
 - `linework run --out` can export either an existing session or a temporary throwaway batch result, and `--width`, `--height`, and `--background` customize the temporary canvas when `--session` is omitted
 - `draw.arrow` / `edit.arrow` support `arrowhead` (`end`, `start`, `both`, `none`) and optional pixel-sized `arrow_size`
 - text objects now support horizontal `anchor` plus width-based wrapping via `max_width`
+- renderer-drawn objects now render through per-object RGBA layers and are alpha-composited in creation order; image objects continue to use explicit `alpha_composite`
 - `linework edit` can select by label when `--id` is omitted; use `--id` when relabeling
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 - version is derived from git tags via `hatch-vcs`; there is no hardcoded version string (see copilot-instructions §6)

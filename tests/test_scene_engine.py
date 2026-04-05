@@ -6,8 +6,9 @@ import json
 from pathlib import Path
 
 import pytest
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageDraw
 
+from linework.render.png import load_default_text_font
 from linework.storage.session import (
     apply_batch,
     apply_mutation,
@@ -236,6 +237,120 @@ def test_draw_circle_stores_ellipse_geometry(
 
     with Image.open(session_path / "render" / "latest.png") as rendered:
         assert rendered.getpixel((60, 50)) == (255, 0, 0, 255)
+
+
+def test_translucent_rectangles_are_composited_in_stacking_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import config
+
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
+    session_path = create_test_session(tmp_path)
+
+    apply_batch(
+        session_path,
+        operations=[
+            {
+                "op": "draw.rect",
+                "payload": {
+                    "x": 10,
+                    "y": 10,
+                    "width": 80,
+                    "height": 60,
+                    "fill": "#FF000080",
+                    "stroke": "#00000000",
+                },
+            },
+            {
+                "op": "draw.rect",
+                "payload": {
+                    "x": 40,
+                    "y": 30,
+                    "width": 80,
+                    "height": 60,
+                    "fill": "#0000FF80",
+                    "stroke": "#00000000",
+                },
+            },
+        ],
+    )
+
+    with Image.open(session_path / "render" / "latest.png") as rendered:
+        assert rendered.getpixel((20, 20)) == (255, 127, 127, 255)
+        assert rendered.getpixel((100, 80)) == (127, 127, 255, 255)
+        assert rendered.getpixel((60, 50)) == (127, 63, 191, 255)
+
+
+def test_translucent_text_is_composited_over_existing_scene(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import config
+
+    monkeypatch.setattr(config, "linework_home", lambda: tmp_path / "linework-home")
+    session_path = create_test_session(tmp_path)
+
+    apply_batch(
+        session_path,
+        operations=[
+            {
+                "op": "draw.rect",
+                "payload": {
+                    "x": 0,
+                    "y": 0,
+                    "width": 200,
+                    "height": 160,
+                    "fill": "#FF000080",
+                    "stroke": "#00000000",
+                },
+            },
+            {
+                "op": "draw.text",
+                "payload": {
+                    "x": 20,
+                    "y": 20,
+                    "text": "Hi",
+                    "size": 24,
+                    "fill": "#00000080",
+                },
+            },
+        ],
+    )
+
+    text_layer = Image.new("RGBA", (200, 160), (0, 0, 0, 0))
+    ImageDraw.Draw(text_layer).text(
+        (20, 20),
+        "Hi",
+        font=load_default_text_font(24),
+        fill=(0, 0, 0, 128),
+    )
+    sample = next(
+        (
+            (x, y)
+            for y in range(text_layer.height)
+            for x in range(text_layer.width)
+            if text_layer.getpixel((x, y))[3] > 0
+        ),
+        None,
+    )
+    assert sample is not None
+
+    expected = Image.new("RGBA", (200, 160), (255, 255, 255, 255))
+    rect_layer = Image.new("RGBA", (200, 160), (0, 0, 0, 0))
+    ImageDraw.Draw(rect_layer).rectangle(
+        (0, 0, 200, 160),
+        fill=(255, 0, 0, 128),
+        outline=(0, 0, 0, 0),
+        width=2,
+    )
+    expected.alpha_composite(rect_layer)
+    expected.alpha_composite(text_layer)
+    rect_only = Image.new("RGBA", (200, 160), (255, 255, 255, 255))
+    rect_only.alpha_composite(rect_layer)
+
+    with Image.open(session_path / "render" / "latest.png") as rendered:
+        assert rendered.getpixel(sample) == expected.getpixel(sample)
+        assert rendered.getpixel(sample) != rect_only.getpixel(sample)
+        assert rendered.getpixel(sample)[3] == 255
 
 
 def test_draw_arrow_renders_with_requested_head_size(

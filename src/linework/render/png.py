@@ -35,24 +35,35 @@ def render_scene(scene: SceneSnapshot, output_path: Path, *, session_path: Path)
         (scene.canvas.width, scene.canvas.height),
         ImageColor.getcolor(scene.canvas.background, "RGBA"),
     )
-    draw = ImageDraw.Draw(image)
-
     for object_data in scene.objects:
         if not bool(object_data.get("visible", True)):
             continue
-        render_object(draw=draw, image=image, object_data=object_data, session_path=session_path)
+        render_object(image=image, object_data=object_data, session_path=session_path)
 
     image.save(output_path, format="PNG")
 
 
 def render_object(
     *,
-    draw: ImageDraw.ImageDraw,
     image: Image.Image,
     object_data: dict[str, object],
     session_path: Path,
 ) -> None:
     """Render one scene object."""
+    object_type = str(object_data["type"])
+
+    if object_type == "image":
+        render_image_object(image=image, object_data=object_data, session_path=session_path)
+        return
+
+    layer = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    render_drawn_object(draw=draw, object_data=object_data)
+    image.alpha_composite(layer)
+
+
+def render_drawn_object(*, draw: ImageDraw.ImageDraw, object_data: dict[str, object]) -> None:
+    """Render one non-image object to a transparent layer."""
     object_type = str(object_data["type"])
 
     if object_type == "line":
@@ -111,29 +122,35 @@ def render_object(
         render_text_object(draw=draw, object_data=object_data)
         return
 
-    if object_type == "image":
-        asset_path = resolve_asset_path(
-            session_path=session_path,
-            asset_path=str(object_data["asset_path"]),
-        )
-        with Image.open(asset_path) as opened_image:
-            pasted = opened_image.convert("RGBA")
-            size = (
-                int(round(number_value(object_data, "width"))),
-                int(round(number_value(object_data, "height"))),
-            )
-            if pasted.size != size:
-                pasted = pasted.resize(size)
-            image.alpha_composite(
-                pasted,
-                (
-                    int(round(number_value(object_data, "x"))),
-                    int(round(number_value(object_data, "y"))),
-                ),
-            )
-        return
+    raise ValueError(f"unsupported non-image object type: {object_type}")
 
-    raise ValueError(f"unsupported object type: {object_type}")
+
+def render_image_object(
+    *,
+    image: Image.Image,
+    object_data: dict[str, object],
+    session_path: Path,
+) -> None:
+    """Render one image object onto the scene."""
+    asset_path = resolve_asset_path(
+        session_path=session_path,
+        asset_path=str(object_data["asset_path"]),
+    )
+    with Image.open(asset_path) as opened_image:
+        pasted = opened_image.convert("RGBA")
+        size = (
+            int(round(number_value(object_data, "width"))),
+            int(round(number_value(object_data, "height"))),
+        )
+        if pasted.size != size:
+            pasted = pasted.resize(size)
+        image.alpha_composite(
+            pasted,
+            (
+                int(round(number_value(object_data, "x"))),
+                int(round(number_value(object_data, "y"))),
+            ),
+        )
 
 
 def load_default_text_font(size: float) -> ImageFont.FreeTypeFont:
