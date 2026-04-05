@@ -13,8 +13,12 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Protocol
 
-from linework.bootstrap import BOOTSTRAP_TEXT
-from linework.capabilities import OTHER_OPERATIONS, operations_for_namespace, schema_manifest
+from linework.bootstrap import (
+    BOOTSTRAP_TEXT,
+    SCHEMA_DISCOVERY_SUMMARY,
+    format_schema_discovery_commands,
+)
+from linework.capabilities import schema_manifest, unsupported_command_message
 from linework.constants import (
     ARROWHEAD_MODES,
     DEFAULT_CANVAS_BACKGROUND,
@@ -44,10 +48,14 @@ class _HelpFormatter(
     """CLI help formatter with defaults and preserved example layout."""
 
 
-_TOP_LEVEL_EPILOG = """\
+_TOP_LEVEL_EPILOG = f"""\
+Orientation:
+  linework                                      # rich bootstrap guide
+
+Capability discovery:
+{format_schema_discovery_commands(indent="  ")}
+
 Golden path:
-  linework                                      # orientation and JSONL reference
-  linework schema --json
   linework new --name idea-board --json
   linework run --session PATH --json < ops.jsonl
   linework inspect --session PATH --json
@@ -80,10 +88,9 @@ Provide --out without --session to use a temporary throwaway session that is
 exported and then deleted.
 """
 
-_SCHEMA_EPILOG = """\
-Examples:
-  linework schema
-  linework schema --json
+_SCHEMA_EPILOG = f"""\
+Capability discovery:
+{format_schema_discovery_commands(indent="  ")}
 """
 
 _INSPECT_EPILOG = """\
@@ -185,9 +192,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="linework",
         description=(
-            "Agent-first CLI sketch tool. Use `linework schema --json` to discover "
-            "supported ops, `linework run` for JSONL batches, `inspect` to read the "
-            "scene back, and `watch` for a read-only window."
+            "Agent-first CLI sketch tool. "
+            f"{SCHEMA_DISCOVERY_SUMMARY} Use `linework run` for JSONL batches, "
+            "`inspect` to read the scene back, and `watch` for a read-only window."
         ),
         epilog=_TOP_LEVEL_EPILOG,
         formatter_class=_HelpFormatter,
@@ -202,15 +209,22 @@ def build_parser() -> argparse.ArgumentParser:
     # --- schema ---
     schema_parser = subparsers.add_parser(
         "schema",
-        help="Print supported operations and payload schema.",
+        help="Print a capability overview, one-op reference, or full/filtered JSON manifest.",
         description=(
-            "Print a human-readable capability summary or a machine-readable JSON "
-            "manifest describing supported operations, payload fields, and defaults."
+            "Print a compact, human-readable capability summary for fast orientation "
+            "or a machine-readable JSON manifest with exact supported operations, "
+            "payload fields, selectors, enums, and defaults. "
+            f"{SCHEMA_DISCOVERY_SUMMARY}"
         ),
         epilog=_SCHEMA_EPILOG,
         formatter_class=_HelpFormatter,
     )
     schema_parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    schema_parser.add_argument(
+        "operation",
+        nargs="?",
+        help="Optional operation name, for example draw.arrow or delete.",
+    )
 
     # --- new ---
     new_parser = subparsers.add_parser(
@@ -1217,9 +1231,170 @@ def _undo_summary(result: MutationResult) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _schema_field_names(spec: object, key: str) -> str:
+    """Return a comma-separated list of field names for a schema section."""
+    assert isinstance(spec, dict)
+    fields = spec.get(key, {})
+    assert isinstance(fields, dict)
+    return ", ".join(str(name) for name in fields)
+
+
+def _schema_operation_spec(manifest: dict[str, object], operation: str) -> dict[str, object] | None:
+    """Return the schema entry for one operation if it exists."""
+    ops = manifest["ops"]
+    assert isinstance(ops, dict)
+    spec = ops.get(operation)
+    if not isinstance(spec, dict):
+        return None
+    return spec
+
+
+def _schema_section_fields(spec: dict[str, object], key: str) -> dict[str, object]:
+    """Return the named field section from an operation schema."""
+    fields = spec.get(key, {})
+    assert isinstance(fields, dict)
+    return fields
+
+
+def _schema_value_text(value: object) -> str:
+    """Render a compact human-readable representation for schema values."""
+    if isinstance(value, str):
+        return value
+    return json.dumps(value)
+
+
+def _schema_field_summary(field: object) -> str:
+    """Render one field definition as a compact plain-text summary."""
+    assert isinstance(field, dict)
+    field_type = field.get("type")
+    assert isinstance(field_type, str)
+
+    details: list[str] = []
+    if "default" in field:
+        details.append(f"default: {_schema_value_text(field['default'])}")
+
+    enum = field.get("enum")
+    if isinstance(enum, list) and enum:
+        details.append("enum: " + ", ".join(_schema_value_text(item) for item in enum))
+
+    description = field.get("description")
+    if isinstance(description, str):
+        details.append(description)
+
+    if not details:
+        return field_type
+    return f"{field_type} ({'; '.join(details)})"
+
+
+def _schema_print_field_block(title: str, fields: dict[str, object]) -> None:
+    """Print a titled block of field definitions."""
+    print(title)
+    if not fields:
+        print("  none")
+        return
+
+    for name, field in fields.items():
+        print(f"  {name}: {_schema_field_summary(field)}")
+
+
+def _schema_field_default(fields: dict[str, object], name: str) -> object:
+    """Return the default value for a named field."""
+    field = fields[name]
+    assert isinstance(field, dict)
+    return field["default"]
+
+
+def _schema_print_operation(operation: str, spec: dict[str, object]) -> None:
+    """Print a detailed plain-text reference for one operation."""
+    print(f"Operation: {operation}")
+
+    description = spec.get("description")
+    if isinstance(description, str):
+        print(f"Description: {description}")
+
+    category = spec.get("category")
+    if isinstance(category, str):
+        print(f"Category: {category}")
+
+    stored_object_type = spec.get("stored_object_type")
+    if isinstance(stored_object_type, str):
+        print(f"Stored object type: {stored_object_type}")
+
+    selector = spec.get("selector")
+    if isinstance(selector, dict):
+        print()
+        print("Selector:")
+        one_of = selector.get("one_of")
+        if isinstance(one_of, list) and one_of:
+            print("  one of: " + ", ".join(str(item) for item in one_of))
+        selector_fields = selector.get("fields")
+        if isinstance(selector_fields, dict):
+            for name, field in selector_fields.items():
+                print(f"  {name}: {_schema_field_summary(field)}")
+
+    payload = spec.get("payload")
+    if isinstance(payload, dict):
+        required = _schema_section_fields(payload, "required")
+        optional = _schema_section_fields(payload, "optional")
+    else:
+        required = _schema_section_fields(spec, "required")
+        optional = _schema_section_fields(spec, "optional")
+
+    if required or optional or not isinstance(selector, dict):
+        print()
+        if required or not optional:
+            _schema_print_field_block("Required fields:", required)
+        if optional:
+            print()
+            _schema_print_field_block("Optional fields:", optional)
+
+    example = spec.get("example")
+    if isinstance(example, dict):
+        print()
+        print("Example:")
+        print("  " + json.dumps(example))
+
+
+def _schema_type_summary_lines(manifest: dict[str, object]) -> list[str]:
+    """Return compact one-line summaries for draw object types."""
+    ops = manifest["ops"]
+    assert isinstance(ops, dict)
+
+    lines: list[str] = []
+    for op, spec in ops.items():
+        if not isinstance(op, str) or not op.startswith("draw."):
+            continue
+        object_type = op.split(".", 1)[1]
+        required = _schema_field_names(spec, "required")
+        optional = _schema_field_names(spec, "optional")
+        lines.append(f"  {object_type:<8} draw {required} | optional {optional}")
+    return lines
+
+
 def cmd_schema(args: argparse.Namespace) -> int:
     """Handle ``linework schema``."""
     manifest = schema_manifest()
+    if args.operation is not None:
+        spec = _schema_operation_spec(manifest, args.operation)
+        if spec is None:
+            return _error(unsupported_command_message(args.operation), use_json=args.json)
+
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "schema_version": manifest["schema_version"],
+                        "canvas_defaults": manifest["canvas_defaults"],
+                        "ops": {args.operation: spec},
+                    },
+                    indent=2,
+                )
+            )
+            return 0
+
+        _schema_print_operation(args.operation, spec)
+        return 0
+
     if args.json:
         print(json.dumps(manifest, indent=2))
         return 0
@@ -1231,10 +1406,60 @@ def cmd_schema(args: argparse.Namespace) -> int:
         f"{canvas_defaults['width']}x{canvas_defaults['height']} "
         f"background {canvas_defaults['background']}"
     )
-    print(f"Draw ops: {', '.join(operations_for_namespace('draw'))}")
-    print(f"Edit ops: {', '.join(operations_for_namespace('edit'))}")
-    print(f"Other ops: {', '.join(sorted(OTHER_OPERATIONS))}")
-    print("Use `linework schema --json` for machine-readable payload fields and defaults.")
+    print()
+    print("Compact overview:")
+    print("  Start here for a quick capability map.")
+    print("  Use the capability-discovery flow below for overview, one-op detail,")
+    print("  exact JSON as needed, and the full manifest.")
+    print()
+    print("Types:")
+    for line in _schema_type_summary_lines(manifest):
+        print(line)
+    print()
+    line_spec = _schema_operation_spec(manifest, "draw.line")
+    text_spec = _schema_operation_spec(manifest, "draw.text")
+    assert line_spec is not None
+    assert text_spec is not None
+    line_optional = _schema_section_fields(line_spec, "optional")
+    text_optional = _schema_section_fields(text_spec, "optional")
+    print("Shared defaults:")
+    print(
+        "  visible="
+        f"{_schema_value_text(_schema_field_default(line_optional, 'visible'))}, "
+        "stroke="
+        f"{_schema_value_text(_schema_field_default(line_optional, 'stroke'))}, "
+        "stroke_width="
+        f"{_schema_value_text(_schema_field_default(line_optional, 'stroke_width'))}"
+    )
+    print(
+        "  text: size="
+        f"{_schema_value_text(_schema_field_default(text_optional, 'size'))}, "
+        "fill="
+        f"{_schema_value_text(_schema_field_default(text_optional, 'fill'))}, "
+        "anchor="
+        f"{_schema_value_text(_schema_field_default(text_optional, 'anchor'))}"
+    )
+    print()
+    print("Rules:")
+    print("  draw.<type>  listed draw fields are required; optional fields remain optional")
+    print("  edit.<type>  selector(id or unique live label) required; object fields are optional")
+    print("  delete       selector(id or unique live label)")
+    print("  undo         no payload")
+    print()
+    print("Special values:")
+    print(f"  arrowhead: {', '.join(ARROWHEAD_MODES)} (default: {ARROWHEAD_MODES[0]})")
+    print(f"  anchor: {', '.join(TEXT_ANCHORS)} (default: {TEXT_ANCHORS[0]})")
+    print()
+    print("Capability discovery:")
+    print(format_schema_discovery_commands(indent="  "))
+    print()
+    print("Notes:")
+    print(
+        "  use `linework inspect --session PATH --json` to discover IDs and labels "
+        "before edit/delete"
+    )
+    print("  `draw.circle` / `edit.circle` are convenience aliases stored as ellipses")
+    print("  `edit.image` changes placement/size only; `asset_path` is fixed after creation")
     return 0
 
 
@@ -1543,7 +1768,7 @@ def _watch_impl_command() -> list[str]:
     if sys.platform == "win32":
         return [_windows_gui_python_executable(), "-m", "linework", "_watch-impl"]
 
-    argv0 = sys.argv[0] if sys.argv else ""  # type: ignore[unreachable]
+    argv0 = sys.argv[0] if sys.argv else ""
     if argv0.endswith("__main__.py") or not argv0:
         return [sys.executable, "-m", "linework", "_watch-impl"]
 

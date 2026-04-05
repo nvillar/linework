@@ -59,6 +59,10 @@ def test_module_entry_point_prints_bootstrap() -> None:
 
 def test_bootstrap_text_mentions_schema_and_new_shapes() -> None:
     assert "linework schema --json" in BOOTSTRAP_TEXT
+    assert "linework schema draw.arrow" in BOOTSTRAP_TEXT
+    assert "linework schema" in BOOTSTRAP_TEXT
+    assert "compact capability overview" in BOOTSTRAP_TEXT
+    assert "full manifest" in BOOTSTRAP_TEXT
     assert "Golden path:" in BOOTSTRAP_TEXT
     assert '"draw.polygon"' in BOOTSTRAP_TEXT
     assert '"draw.arrow"' in BOOTSTRAP_TEXT
@@ -79,8 +83,14 @@ def test_top_level_help_includes_golden_path() -> None:
     result = run_cli("--help")
 
     assert result.returncode == 0
+    assert "Orientation:" in result.stdout
+    assert "Capability discovery:" in result.stdout
     assert "Golden path:" in result.stdout
+    assert "compact capability overview" in result.stdout
+    assert "linework schema draw.arrow" in result.stdout
     assert "linework schema --json" in result.stdout
+    assert "full manifest" in result.stdout
+    assert "linework schema" in result.stdout
     assert "linework run --session PATH --json < ops.jsonl" in result.stdout
     assert result.stderr == ""
 
@@ -105,6 +115,28 @@ def test_watch_help_lists_interval_flag() -> None:
     assert result.stderr == ""
 
 
+def test_schema_command_outputs_compact_overview() -> None:
+    result = run_cli("schema")
+
+    assert result.returncode == 0
+    assert "Compact overview:" in result.stdout
+    assert "Use the capability-discovery flow below for overview, one-op detail," in result.stdout
+    assert "Shared defaults:" in result.stdout
+    assert "Capability discovery:" in result.stdout
+    assert "visible=true, stroke=#000000, stroke_width=2.0" in result.stdout
+    assert "text: size=16.0, fill=#000000, anchor=left" in result.stdout
+    assert "linework schema draw.arrow" in result.stdout
+    assert "linework schema --json" in result.stdout
+    assert "full manifest" in result.stdout
+    assert "draw x1, y1, x2, y2 | optional label, visible, stroke, stroke_width" in result.stdout
+    assert "arrowhead: end, start, both, none (default: end)" in result.stdout
+    assert (
+        "`edit.image` changes placement/size only; `asset_path` is fixed after creation"
+        in result.stdout
+    )
+    assert result.stderr == ""
+
+
 def test_schema_command_outputs_machine_readable_manifest() -> None:
     result = run_cli("schema", "--json")
 
@@ -123,6 +155,37 @@ def test_schema_command_outputs_machine_readable_manifest() -> None:
         "right",
     ]
     assert result.stderr == ""
+
+
+def test_schema_command_outputs_single_operation_overview() -> None:
+    result = run_cli("schema", "draw.arrow")
+
+    assert result.returncode == 0
+    assert "Operation: draw.arrow" in result.stdout
+    assert "Description: Create an arrow." in result.stdout
+    assert "Required fields:" in result.stdout
+    assert "x1: number" in result.stdout
+    assert "arrowhead: string (default: end; enum: end, start, both, none)" in result.stdout
+    assert '"op": "draw.arrow"' in result.stdout
+    assert result.stderr == ""
+
+
+def test_schema_command_outputs_single_operation_manifest() -> None:
+    result = run_cli("schema", "--json", "draw.arrow")
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert sorted(payload["ops"]) == ["draw.arrow"]
+    assert payload["ops"]["draw.arrow"]["optional"]["arrowhead"]["default"] == "end"
+    assert result.stderr == ""
+
+
+def test_schema_command_rejects_unknown_operation() -> None:
+    result = run_cli("schema", "draw.square")
+
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "did you mean draw.rect?" in result.stderr
 
 
 def test_watch_missing_session_reports_plain_error(tmp_path: Path) -> None:

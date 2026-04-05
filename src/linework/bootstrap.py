@@ -1,5 +1,7 @@
 """Bootstrap help text for the top-level CLI."""
 
+from __future__ import annotations
+
 from linework.constants import (
     DEFAULT_CANVAS_BACKGROUND,
     DEFAULT_CANVAS_HEIGHT,
@@ -12,6 +14,30 @@ _DEFAULTS_LINE = (
     f"(pass --headless to suppress)."
 )
 
+SCHEMA_DISCOVERY_SUMMARY = (
+    "Start with `linework schema` for a compact capability overview. "
+    "Use `linework schema OP` to dig into one operation as needed. "
+    "Use `linework schema --json [OP]` for exact JSON field metadata, or "
+    "`linework schema --json` for the full manifest."
+)
+
+_SCHEMA_DISCOVERY_COMMANDS = (
+    ("linework schema", "quick overview"),
+    ("linework schema draw.arrow", "detailed one-op reference"),
+    ("linework schema --json draw.arrow", "exact JSON for one op"),
+    ("linework schema --json", "full manifest"),
+)
+
+
+def format_schema_discovery_commands(*, indent: str = "") -> str:
+    """Return aligned capability-discovery commands for help text."""
+    command_width = max(len(command) for command, _ in _SCHEMA_DISCOVERY_COMMANDS)
+    return "\n".join(
+        f"{indent}{command:<{command_width}}  # {description}"
+        for command, description in _SCHEMA_DISCOVERY_COMMANDS
+    )
+
+
 BOOTSTRAP_TEXT = f"""\
 linework: agent-first CLI sketch tool
 
@@ -19,10 +45,11 @@ Linework is a non-interactive, session-based drawing tool for fast sketches.
 Every drawing lives in an explicit session directory. JSONL batch operations are
 the primary interface, with convenience commands for common single-object edits.
 {_DEFAULTS_LINE}
+{SCHEMA_DISCOVERY_SUMMARY}
 
 Golden path:
-  1. Discover the command surface
-     linework schema --json
+  1. Discover capabilities
+{format_schema_discovery_commands(indent="     ")}
 
   2. Create a session (opens a watcher window for the user)
      linework new --name idea-board --json
@@ -35,11 +62,11 @@ Golden path:
 
   5. Edit or delete one object
      linework edit rect --session PATH --id obj_000001 --fill #CCE5FF --json
-      linework delete --session PATH --label note-box --json
+     linework delete --session PATH --label note-box --json
 
   6. Export
-      linework export --session PATH --out out.png
-      linework run --file ops.jsonl --out out.png
+     linework export --session PATH --out out.png
+     linework run --file ops.jsonl --out out.png
 
 JSONL reference (pipe to linework run --session PATH --json):
   {{"op":"draw.line","payload":{{"x1":0,"y1":0,"x2":200,"y2":100}}}}
@@ -69,7 +96,7 @@ Selection:
     you need to relabel an object.
 
 Commands:
-  linework schema       Print supported operations and payload schema
+  linework schema       Print compact overview, one-op reference, or full manifest
   linework new          Create a new session
   linework run          Apply JSONL operations (primary interface)
   linework inspect      Read current scene state

@@ -79,7 +79,7 @@ The bundled font becomes part of the rendering contract for the MVP.
 - Explicit session paths
 - Rich no-argument bootstrap output
 - Standard help system
-- Machine-readable capability discovery via `linework schema --json`
+- Tiered capability discovery via `linework schema` (overview), `linework schema OP` (one-op detail), and `linework schema --json` (full manifest)
 - Human-readable default output
 - `--json` machine-readable output with structured errors
 - Single-canvas sessions
@@ -416,7 +416,7 @@ The MVP CLI has two tiers of commands:
 
 - `linework` — bootstrap guide
 - `linework --version` — print the installed version
-- `linework schema` — print supported operations and payload schema
+- `linework schema` — capability overview, one-op detail, or full JSON manifest
 - `linework new` — create a session
 - `linework run` — batch operations via JSONL (primary mutation interface)
 - `linework inspect` — read current session state
@@ -441,7 +441,7 @@ Invoking `linework` with no arguments must print a rich bootstrap guide and exit
 The bootstrap output must explain:
 
 - what `linework` is
-- how to discover supported operations with `linework schema --json`
+- the recommended discovery flow: `linework schema` for a quick overview, `linework schema OP` for one-operation detail, and `linework schema --json` for the full reference
 - the session model
 - the JSONL batch workflow as the primary interface
 - the default canvas size and background
@@ -458,8 +458,9 @@ Read-only capability discovery for humans and agents.
 Behavior:
 
 - requires no session
-- default output prints canvas defaults and the supported draw/edit/mutation ops
-- `--json` prints a machine-readable manifest
+- default output prints a compact reference card with canvas defaults, object types, high-level field names, shared defaults, operation rules, and the recommended discovery flow
+- passing `OP` prints a detailed reference for one operation
+- `--json` prints a machine-readable manifest for exact field lookup and external tooling; with `OP`, it filters the manifest to that operation
 
 The JSON manifest must include:
 
@@ -471,6 +472,7 @@ The JSON manifest must include:
 
 Flags:
 
+- `[OP]`
 - `--json`
 
 ### 9.3 `linework new`

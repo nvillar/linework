@@ -108,7 +108,8 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 #### Milestone 10: Agent UX improvements (complete)
 
 - smarter unsupported-command errors with suggestions and valid-op lists
-- new `linework schema --json` capability manifest
+- tiered `linework schema` discovery: compact overview, `linework schema OP` one-op detail, and `linework schema --json` full manifest
+- consistent discovery guidance across no-arg bootstrap, `--help`, and `linework schema`
 - `draw.circle` / `edit.circle` convenience aliases stored as ellipses
 - `linework run --out` one-shot temporary-session export flow
 - `arrow` primitive with configurable `arrowhead` and optional `arrow_size`
@@ -123,7 +124,7 @@ Current user-facing command surface:
 
 - `linework` (no-arg bootstrap)
 - `linework --version`
-- `linework schema`
+- `linework schema [OP]` (compact overview, one-op detail, or `--json` manifest)
 - `linework new`
 - `linework run` (JSONL batch — primary agent interface)
 - `linework inspect`
@@ -137,7 +138,7 @@ Current user-facing command surface:
 Internal engine capabilities:
 
 - append-only mutation engine for `draw.line`, `draw.arrow`, `draw.rect`, `draw.ellipse`, `draw.circle`, `draw.polyline`, `draw.polygon`, `draw.text`, `draw.image`, `edit.*`, `delete`, `undo`
-- machine-readable schema manifest for agents and external tooling
+- tiered schema discovery: compact overview, per-operation detail, and full JSON manifest
 - JSONL batch execution with single-render-at-end semantics
 - batch-aware undo grouping for `linework run`
 - one-shot batch export via `linework run --out`
@@ -159,7 +160,7 @@ Implementation notes:
 - text rendering uses a bundled Noto Sans font shipped in `src/linework/assets/`
 - image rendering and export now validate session-local assets; image source replacement remains out of scope
 - `linework new` now defaults to an `800x800` canvas
-- `linework schema --json` exposes supported ops, field schemas, selectors, enums, defaults, and canvas defaults
+- no-arg `linework`, `linework --help`, and `linework schema` now give consistent discovery advice: quick overview first, one-operation detail as needed, and `linework schema --json` as the full reference
 - `draw.circle` / `edit.circle` accept `x`, `y`, and `radius`, but the stored scene object type remains `ellipse`
 - `linework run --out` can export either an existing session or a temporary throwaway batch result
 - `draw.arrow` / `edit.arrow` support `arrowhead` (`end`, `start`, `both`, `none`) and optional pixel-sized `arrow_size`
