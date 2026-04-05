@@ -94,7 +94,7 @@ def test_uv_tool_install_from_project_runs_installed_cli(tmp_path: Path) -> None
 
     session_path = tmp_path / "installed-session"
     new_result = _run(
-        [str(binary_path), "new", "--session", str(session_path), "--json", "--headless"],
+        [str(binary_path), "new", "--session", str(session_path), "--json"],
         env=env,
     )
     assert new_result.returncode == 0, new_result.stderr

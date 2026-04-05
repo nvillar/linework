@@ -443,10 +443,10 @@ The bootstrap output must explain:
 - what `linework` is
 - the recommended discovery flow: `linework schema` for a quick overview, `linework schema OP` for one-operation detail, and `linework schema --json` for the full reference
 - the session model
-- the recommended workflow split: `linework new` for persistent watched sessions, `linework run --out` for disposable headless exports
+- the recommended workflow split: `linework new` for persistent sessions, `linework watch` for live display, `linework run --out` for disposable headless exports
 - the JSONL batch workflow as the primary interface
 - the default canvas size and background
-- how `linework new --file/--stdin` can seed a watched session from an initial batch
+- how `linework new --file/--stdin` can seed a session from an initial batch
 - the inspect → edit/delete workflow for discovering IDs and labels
 - the core commands
 - an end-to-end agent example from session creation through JSONL batch to rendered PNG
@@ -487,14 +487,13 @@ Behavior:
 - `--file PATH` or `--stdin` applies an initial JSONL batch immediately after session creation.
 - Print the session path and short session ID.
 - Render the initial blank PNG immediately.
-- By default, watcher launch is best-effort; session creation still succeeds if the watcher cannot start.
+- Output always includes a `watch_command` hint with the exact command to open a live watcher for this session. In JSON mode this is a `watch_command` field; in plaintext mode it is printed as a `Watch:` line.
 
 Required semantics:
 
 - default canvas size: `800x800`
 - default background: `#FFFFFF`
-- the watcher opens automatically after session creation unless `--headless` is passed
-- when `--file` or `--stdin` is used, the watcher still opens by default after seeding unless `--headless` is passed
+- session creation does not launch the watcher; use `linework watch` separately
 - when `--json` is used with `--file` or `--stdin`, output includes the created-session fields plus batch result fields (`applied`, `failed`, `results`, `scene_object_count`)
 
 Flags:
@@ -504,7 +503,6 @@ Flags:
 - `--width INT`
 - `--height INT`
 - `--background #RRGGBB`
-- `--headless`
 - `--file PATH`
 - `--stdin`
 - `--json`

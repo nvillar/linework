@@ -172,8 +172,8 @@ Implementation notes:
 - `linework new` now defaults to an `800x800` canvas
 - no-arg `linework`, `linework --help`, and `linework schema` now give consistent discovery advice: quick overview first, one-operation detail as needed, and `linework schema --json` as the full reference
 - `draw.circle` / `edit.circle` accept `x`, `y`, and `radius`, but the stored scene object type remains `ellipse`
-- workflow guidance now consistently recommends `linework new` for persistent watched sessions and `linework run --out` for disposable headless exports
-- `linework new` opens the watcher by default; pass `--headless` to suppress; watcher failure is silent; `--file` / `--stdin` seed the session before watcher launch
+- workflow guidance now consistently recommends `linework new` for persistent sessions, `linework watch` for live display, and `linework run --out` for disposable headless exports
+- `linework new` output always includes a `watch_command` hint; `--file` / `--stdin` seed the session from an initial batch
 - `linework run --out` can export either an existing session or a temporary throwaway batch result, and `--width`, `--height`, and `--background` customize the temporary canvas when `--session` is omitted
 - `draw.arrow` / `edit.arrow` support `arrowhead` (`end`, `start`, `both`, `none`) and optional pixel-sized `arrow_size`
 - text objects now support horizontal `anchor` plus width-based wrapping via `max_width`

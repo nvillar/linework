@@ -10,8 +10,7 @@ from linework.constants import (
 
 _DEFAULTS_LINE = (
     f"Defaults: canvas {DEFAULT_CANVAS_WIDTH}x{DEFAULT_CANVAS_HEIGHT}, "
-    f"background {DEFAULT_CANVAS_BACKGROUND}. A watcher window opens automatically "
-    f"(pass --headless to suppress)."
+    f"background {DEFAULT_CANVAS_BACKGROUND}."
 )
 
 SCHEMA_DISCOVERY_SUMMARY = (
@@ -22,7 +21,8 @@ SCHEMA_DISCOVERY_SUMMARY = (
 )
 
 WORKFLOW_GUIDANCE_SUMMARY = (
-    "Use `linework new` for persistent sessions and live watcher workflows. "
+    "Use `linework new` for persistent sessions. "
+    "Use `linework watch` to open a live watcher for the user. "
     "Use `linework run --out` for disposable headless exports."
 )
 
@@ -34,8 +34,9 @@ _SCHEMA_DISCOVERY_COMMANDS = (
 )
 
 _WORKFLOW_GUIDANCE_COMMANDS = (
-    ("linework new --name idea-board", "persistent session; watcher opens by default"),
-    ("linework new --stdin --name idea-board", "create a watched session from an initial batch"),
+    ("linework new --name idea-board", "persistent session"),
+    ("linework watch --session PATH", "open a live watcher for the user"),
+    ("linework new --stdin --name idea-board", "create a session from an initial batch"),
     ("linework run --file ops.jsonl --out out.png", "disposable one-shot export"),
 )
 
@@ -75,20 +76,23 @@ Golden path:
   2. Pick a workflow
 {format_workflow_guidance_commands(indent="     ")}
 
-  3. Create a session (opens a watcher window for the user)
+  3. Create a session
      linework new --name idea-board --json
 
-  4. Draw via JSONL batch (primary interface)
+  4. Open a watcher for the user (if they want to see it live)
+      linework watch --session PATH
+
+  5. Draw via JSONL batch (primary interface)
       linework run --session PATH --json < ops.jsonl
 
-  5. Inspect the scene to discover IDs and labels before editing
+  6. Inspect the scene to discover IDs and labels before editing
       linework inspect --session PATH --json
 
-  6. Edit or delete one object
+  7. Edit or delete one object
       linework edit rect --session PATH --id obj_000001 --fill #CCE5FF --json
       linework delete --session PATH --label note-box --json
 
-  7. Export
+  8. Export
       linework export --session PATH --out out.png
       linework run --file ops.jsonl --out out.png --width 1200 --height 800
 

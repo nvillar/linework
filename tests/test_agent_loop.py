@@ -22,12 +22,8 @@ def run_cli(
     if env is not None:
         command_env.update(env)
 
-    cli_args = list(args)
-    if cli_args[:1] == ["new"] and "--headless" not in cli_args and "--help" not in cli_args:
-        cli_args.append("--headless")
-
     return subprocess.run(
-        [sys.executable, "-m", "linework", *cli_args],
+        [sys.executable, "-m", "linework", *args],
         check=False,
         capture_output=True,
         text=True,

@@ -74,8 +74,9 @@ Examples:
   linework new --name idea-board
   linework new --file ops.jsonl --name idea-board
   cat ops.jsonl | linework new --stdin --name idea-board --json
-  linework new --name headless-batch --headless
   linework new --width {DEFAULT_CANVAS_WIDTH} --height {DEFAULT_CANVAS_HEIGHT}
+
+The output includes a watch_command for opening a live watcher window.
 """
 
 _RUN_EPILOG = """\
@@ -268,11 +269,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--background",
         default=DEFAULT_CANVAS_BACKGROUND,
         help="Canvas background color in #RRGGBB or #RRGGBBAA form.",
-    )
-    new_parser.add_argument(
-        "--headless",
-        action="store_true",
-        help="Skip the watcher window (opened by default).",
     )
     new_batch_group = new_parser.add_mutually_exclusive_group()
     new_batch_group.add_argument(
@@ -1198,6 +1194,7 @@ def _new_output_payload(
 ) -> dict[str, object]:
     """Serialize new-session output with optional initial-batch metadata."""
     payload = created.to_dict()
+    payload["watch_command"] = f"linework watch --session {created.session_path}"
     if batch_result is not None:
         payload.update(
             {
@@ -1210,23 +1207,15 @@ def _new_output_payload(
     return payload
 
 
-def _watcher_hint_command(session_path: str) -> str:
-    """Return the plain watch command for copy-paste when auto-launch fails."""
-    return f"linework watch --session {session_path}"
-
-
 def _emit_new_session_result(
     *,
     created: CreatedSession,
     use_json: bool,
     batch_result: BatchResult | None = None,
-    watcher_hint: str | None = None,
 ) -> int:
     """Emit output for a new session, optionally seeded from an initial batch."""
     if use_json:
         payload = _new_output_payload(created, batch_result=batch_result)
-        if watcher_hint is not None:
-            payload["watcher_hint"] = watcher_hint
         print(json.dumps(payload, indent=2))
         return 1 if batch_result is not None and batch_result.failed is not None else 0
 
@@ -1236,9 +1225,7 @@ def _emit_new_session_result(
         if batch_result.failed:
             print(f"Failed: {batch_result.failed['op']}: {batch_result.failed['error']}")
         print(f"Objects: {batch_result.scene_object_count}")
-    if watcher_hint is not None:
-        print("Watcher unavailable. To open it manually from a terminal:")
-        print(watcher_hint)
+    print(f"Watch: linework watch --session {created.session_path}")
     return 1 if batch_result is not None and batch_result.failed is not None else 0
 
 
@@ -1598,29 +1585,6 @@ def cmd_new(args: argparse.Namespace) -> int:
         except (OSError, SessionError, SessionLockedError, SceneEngineError) as exc:
             return _error(str(exc), use_json=args.json)
 
-    if not args.headless:
-        try:
-            pid = _launch_detached_watcher(
-                result.session_path,
-                interval_ms=DEFAULT_INTERVAL_MS,
-            )
-        except (OSError, SessionError, WatchError):
-            # Watcher is best-effort; session creation still succeeds.
-            return _emit_new_session_result(
-                created=result,
-                use_json=args.json,
-                batch_result=batch_result,
-                watcher_hint=_watcher_hint_command(result.session_path),
-            )
-        exit_code = _emit_new_session_result(
-            created=result,
-            use_json=args.json,
-            batch_result=batch_result,
-        )
-        if not args.json:
-            print(f"Watcher opened (pid {pid})")
-        return exit_code
-
     return _emit_new_session_result(
         created=result,
         use_json=args.json,
@@ -1813,13 +1777,15 @@ def cmd_watch(args: argparse.Namespace) -> int:
     except (OSError, SessionError) as exc:
         return _error(str(exc), use_json=False)
     except WatchError:
-        hint = _watcher_hint_command(args.session)
         print(
             "Watcher unavailable in this environment. "
             "Ask the user to run this command from a terminal:",
             file=sys.stderr,
         )
-        print(hint, file=sys.stderr)
+        print(
+            f"linework watch --session {args.session}",
+            file=sys.stderr,
+        )
         return 1
     print(f"Watcher opened (pid {pid})")
     return 0

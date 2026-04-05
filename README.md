@@ -8,8 +8,8 @@ tweak things (*make the red box wider, change the background, relabel
 that arrow*), editing the shapes in place instead of regenerating the image 
 from scratch.
 
-When the agent starts a `linework` session, a read-only **watcher window** 
-opens to show the drawing come together in real time. The agent can also use 
+When the agent starts a `linework` session, it can open a read-only **watcher
+window** to show the drawing come together in real time. The agent can also use
 `linework` as a background process with no graphical interface.
 
 ![screenshot of an agent using linework to make a chart and a picture](screenshot.png)
@@ -48,12 +48,12 @@ Run `linework` with no arguments to learn how it works. Start by creating a
 session, then draw a self-portrait.
 ```
 
-The agent will read the built-in bootstrap guide, create a session, open the
-watcher window on your screen, and start drawing.
+The agent will read the built-in bootstrap guide, create a session, and start
+drawing. If you want to watch it work, ask it to open the watcher — or run
+`linework watch --session PATH` yourself.
 
-For iterative work, steer it toward `linework new` so the watcher opens and the
-session sticks around. For a throwaway file with no watcher, steer it toward
-`linework run --out`.
+For iterative work, steer it toward `linework new` and `linework watch`.
+For a throwaway file with no watcher, steer it toward `linework run --out`.
 
 The agent might take some time to first explore the tool, learn how it works, 
 and finally put together a drawing. Making changes should be much faster, and
@@ -78,15 +78,18 @@ to use it to avoid having to learn it every time.
 
 Every drawing lives in a portable **session directory** when you want to keep
 iterating. The primary interface is **JSONL batch mode**, designed for automated
-agent loops. Use `linework new` for persistent, watcher-first workflows, and
-use `linework run --out` for disposable headless exports. Here are the main
-patterns behind the scenes:
+agent loops. Use `linework new` for persistent sessions, `linework watch` to
+open a live display, and `linework run --out` for disposable headless exports.
+Here are the main patterns behind the scenes:
 
 ```bash
-# Create a session. A watcher window opens automatically
+# Create a session
 linework new --name demo
 
-# Or create and seed a watched session from an existing JSONL batch
+# Open a watcher so the user can see changes live
+linework watch --session PATH
+
+# Or create and seed a session from an existing JSONL batch
 linework new --name demo --file ops.jsonl
 
 # Draw via JSONL batch (in another terminal)
