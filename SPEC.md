@@ -417,8 +417,8 @@ The MVP CLI has two tiers of commands:
 - `linework` — bootstrap guide
 - `linework --version` — print the installed version and check for updates
 - `linework schema` — capability overview, one-op detail, or full JSON manifest
-- `linework new` — create a session
-- `linework run` — batch operations via JSONL (primary mutation interface)
+- `linework new` — create a session, optionally seeded from JSONL
+- `linework run` — batch operations via JSONL or disposable one-shot export
 - `linework inspect` — read current session state
 - `linework export` — export PNG to a specified path
 - `linework watch` — open a read-only watcher window
@@ -443,9 +443,10 @@ The bootstrap output must explain:
 - what `linework` is
 - the recommended discovery flow: `linework schema` for a quick overview, `linework schema OP` for one-operation detail, and `linework schema --json` for the full reference
 - the session model
+- the recommended workflow split: `linework new` for persistent watched sessions, `linework run --out` for disposable headless exports
 - the JSONL batch workflow as the primary interface
 - the default canvas size and background
-- the one-shot `linework run --out` workflow for throwaway images
+- how `linework new --file/--stdin` can seed a watched session from an initial batch
 - the inspect → edit/delete workflow for discovering IDs and labels
 - the core commands
 - an end-to-end agent example from session creation through JSONL batch to rendered PNG
@@ -483,6 +484,7 @@ Behavior:
 
 - If `--session PATH` is given, create the session there.
 - Otherwise create it under `~/.linework/sessions/`.
+- `--file PATH` or `--stdin` applies an initial JSONL batch immediately after session creation.
 - Print the session path and short session ID.
 - Render the initial blank PNG immediately.
 - By default, watcher launch is best-effort; session creation still succeeds if the watcher cannot start.
@@ -492,6 +494,8 @@ Required semantics:
 - default canvas size: `800x800`
 - default background: `#FFFFFF`
 - the watcher opens automatically after session creation unless `--headless` is passed
+- when `--file` or `--stdin` is used, the watcher still opens by default after seeding unless `--headless` is passed
+- when `--json` is used with `--file` or `--stdin`, output includes the created-session fields plus batch result fields (`applied`, `failed`, `results`, `scene_object_count`)
 
 Flags:
 
@@ -501,6 +505,8 @@ Flags:
 - `--height INT`
 - `--background #RRGGBB`
 - `--headless`
+- `--file PATH`
+- `--stdin`
 - `--json`
 
 ### 9.4 `linework run`
@@ -513,12 +519,16 @@ Behavior:
 - reads JSONL from stdin by default
 - supports `--file PATH` to read from a file
 - supports `--out PATH` to export the rendered result after the batch
+- supports `--width INT` and `--height INT` to size the temporary canvas when used with `--out` and without `--session`
+- supports `--background #RRGGBB[AA]` to customize the temporary canvas when used with `--out` and without `--session`
 - applies operations sequentially
 - stops on first failure
 - prior successful operations remain committed
 - renders `render/latest.png` once after the last successful operation in the batch
 - a later `undo` reverses the successful portion of that batch as one action
-- when `--session` is omitted and `--out` is provided, `linework` must create a temporary default session, apply the batch, export the PNG, and then delete that temporary session
+- when `--session` is omitted and `--out` is provided, `linework` must create a temporary default session, apply the batch, export the PNG, and then delete that temporary session; `--width`, `--height`, and `--background` customize that temporary session
+- `--width`, `--height`, and `--background` must be rejected when `--session` is provided
+- for persistent sessions and watcher-first workflows, users should prefer `linework new` followed by `linework run --session`, or seed the session directly with `linework new --file/--stdin`
 
 Each input line must be a JSON object with `op` and `payload` fields:
 
@@ -535,6 +545,9 @@ Flags:
 - `--session PATH`
 - `--file PATH`
 - `--out PATH`
+- `--background #RRGGBB[AA]`
+- `--width INT`
+- `--height INT`
 - `--json`
 
 #### `linework run --json` output

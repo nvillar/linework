@@ -51,6 +51,10 @@ session, then draw a self-portrait.
 The agent will read the built-in bootstrap guide, create a session, open the
 watcher window on your screen, and start drawing.
 
+For iterative work, steer it toward `linework new` so the watcher opens and the
+session sticks around. For a throwaway file with no watcher, steer it toward
+`linework run --out`.
+
 The agent might take some time to first explore the tool, learn how it works, 
 and finally put together a drawing. Making changes should be much faster, and
 you can watch the drawing update on the watcher window.
@@ -72,13 +76,18 @@ to use it to avoid having to learn it every time.
 
 ## Under the hood
 
-Every drawing lives in a portable **session directory**. The primary interface is
-**JSONL batch mode**, designed for automated agent loops. Here's what the agent
-is doing behind the scenes:
+Every drawing lives in a portable **session directory** when you want to keep
+iterating. The primary interface is **JSONL batch mode**, designed for automated
+agent loops. Use `linework new` for persistent, watcher-first workflows, and
+use `linework run --out` for disposable headless exports. Here are the main
+patterns behind the scenes:
 
 ```bash
 # Create a session. A watcher window opens automatically
 linework new --name demo
+
+# Or create and seed a watched session from an existing JSONL batch
+linework new --name demo --file ops.jsonl
 
 # Draw via JSONL batch (in another terminal)
 cat <<'EOF' | linework run --session PATH --json
@@ -92,6 +101,9 @@ linework inspect --session PATH --json
 
 # Export a PNG
 linework export --session PATH --out diagram.png
+
+# Or do a disposable one-shot export with a temporary canvas
+linework run --file ops.jsonl --out diagram.png --width 1200 --height 800 --background "#111827"
 ```
 
 The **watcher window** runs as its own process, so it stays open while the agent works across multiple commands.

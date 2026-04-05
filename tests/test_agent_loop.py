@@ -383,6 +383,33 @@ class TestRunCLI:
         with Image.open(out_path) as exported:
             assert exported.getpixel((40, 40)) == (255, 0, 0, 255)
 
+    def test_run_without_session_can_override_one_shot_canvas(self, tmp_path: Path) -> None:
+        linework_home = tmp_path / "linework-home"
+        out_path = tmp_path / "one-shot-background.png"
+        result = run_cli(
+            "run",
+            "--out",
+            str(out_path),
+            "--width",
+            "320",
+            "--height",
+            "200",
+            "--background",
+            "#111827",
+            "--json",
+            env={"LINEWORK_HOME": str(linework_home)},
+            stdin='{"op":"draw.circle","payload":{"x":20,"y":20,"radius":24,"fill":"#FF0000"}}\n',
+        )
+
+        assert result.returncode == 0
+        payload = json.loads(result.stdout)
+        assert payload["applied"] == 1
+        assert payload["exported_path"] == str(out_path.resolve())
+        with Image.open(out_path) as exported:
+            assert exported.size == (320, 200)
+            assert exported.getpixel((5, 5)) == (17, 24, 39, 255)
+            assert exported.getpixel((40, 40)) == (255, 0, 0, 255)
+
     def test_run_requires_session_or_out_json_error(self, tmp_path: Path) -> None:
         result = run_cli(
             "run",
@@ -557,3 +584,37 @@ class TestJsonErrorContract:
         assert result.returncode == 1
         payload = json.loads(result.stdout)
         assert set(payload) == {"error"}
+
+    def test_run_rejects_one_shot_canvas_options_with_session_json_error(
+        self, tmp_path: Path
+    ) -> None:
+        linework_home = tmp_path / "linework-home"
+        session_path = tmp_path / "cli-session"
+        run_cli(
+            "new",
+            "--session",
+            str(session_path),
+            env={"LINEWORK_HOME": str(linework_home)},
+        )
+        result = run_cli(
+            "run",
+            "--session",
+            str(session_path),
+            "--width",
+            "320",
+            "--height",
+            "200",
+            "--background",
+            "#111827",
+            "--json",
+            env={"LINEWORK_HOME": str(linework_home)},
+            stdin='{"op":"undo","payload":{}}\n',
+        )
+
+        assert result.returncode == 1
+        payload = json.loads(result.stdout)
+        assert set(payload) == {"error"}
+        assert "--background" in payload["error"]
+        assert "--width" in payload["error"]
+        assert "--height" in payload["error"]
+        assert result.stderr == ""

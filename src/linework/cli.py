@@ -16,7 +16,9 @@ from typing import Protocol
 from linework.bootstrap import (
     BOOTSTRAP_TEXT,
     SCHEMA_DISCOVERY_SUMMARY,
+    WORKFLOW_GUIDANCE_SUMMARY,
     format_schema_discovery_commands,
+    format_workflow_guidance_commands,
 )
 from linework.capabilities import schema_manifest, unsupported_command_message
 from linework.constants import (
@@ -55,6 +57,9 @@ Orientation:
 Capability discovery:
 {format_schema_discovery_commands(indent="  ")}
 
+Workflow choice:
+{format_workflow_guidance_commands(indent="  ")}
+
 Golden path:
   linework new --name idea-board --json
   linework run --session PATH --json < ops.jsonl
@@ -67,6 +72,8 @@ _NEW_EPILOG = f"""\
 Examples:
   linework new --json
   linework new --name idea-board
+  linework new --file ops.jsonl --name idea-board
+  cat ops.jsonl | linework new --stdin --name idea-board --json
   linework new --name headless-batch --headless
   linework new --width {DEFAULT_CANVAS_WIDTH} --height {DEFAULT_CANVAS_HEIGHT}
 """
@@ -75,7 +82,7 @@ _RUN_EPILOG = """\
 Examples:
   linework run --session PATH --json < ops.jsonl
   linework run --session PATH --file ops.jsonl
-  linework run --file ops.jsonl --out out.png
+  linework run --file ops.jsonl --out out.png --width 1200 --height 800 --background #111827
 
 JSONL input:
   {"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100}}
@@ -85,7 +92,10 @@ JSONL input:
   {"op":"delete","payload":{"label":"note-box"}}
 
 Provide --out without --session to use a temporary throwaway session that is
-exported and then deleted.
+exported and then deleted. Use --width, --height, and --background to
+customize that temporary canvas. For persistent sessions and live watcher
+behavior, prefer `linework new` and then `linework run --session`, or seed
+the session directly with `linework new --file/--stdin`.
 """
 
 _SCHEMA_EPILOG = f"""\
@@ -194,7 +204,8 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Agent-first CLI sketch tool. "
             f"{SCHEMA_DISCOVERY_SUMMARY} Use `linework run` for JSONL batches, "
-            "`inspect` to read the scene back, and `watch` for a read-only window."
+            f"{WORKFLOW_GUIDANCE_SUMMARY} Use `inspect` to read the scene back, "
+            "and `watch` for a read-only window."
         ),
         epilog=_TOP_LEVEL_EPILOG,
         formatter_class=_HelpFormatter,
@@ -231,8 +242,9 @@ def build_parser() -> argparse.ArgumentParser:
         "new",
         help="Create a new linework session.",
         description=(
-            "Create a new session directory with a blank render. The default canvas "
-            f"is {DEFAULT_CANVAS_WIDTH}x{DEFAULT_CANVAS_HEIGHT} with a "
+            "Create a new session directory with a blank render, or seed it from "
+            "an initial JSONL batch via --file or --stdin. The default canvas is "
+            f"{DEFAULT_CANVAS_WIDTH}x{DEFAULT_CANVAS_HEIGHT} with a "
             f"{DEFAULT_CANVAS_BACKGROUND} background."
         ),
         epilog=_NEW_EPILOG,
@@ -262,6 +274,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip the watcher window (opened by default).",
     )
+    new_batch_group = new_parser.add_mutually_exclusive_group()
+    new_batch_group.add_argument(
+        "--file",
+        help="Read an initial JSONL batch from a file after creating the session.",
+    )
+    new_batch_group.add_argument(
+        "--stdin",
+        action="store_true",
+        help="Read an initial JSONL batch from stdin after creating the session.",
+    )
     new_parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
     # --- run ---
@@ -271,7 +293,11 @@ def build_parser() -> argparse.ArgumentParser:
         description=(
             "Apply JSONL operations to an existing session, or export a one-shot "
             "throwaway batch with --out. Operations run in order, stop on first "
-            "failure, and render once at the end."
+            "failure, and render once at the end. When used without --session, "
+            "--width, --height, and --background customize the temporary canvas. "
+            "For persistent sessions and watcher-first workflows, prefer "
+            "`linework new` and then `linework run --session`, or seed the "
+            "session directly with `linework new --file/--stdin`."
         ),
         epilog=_RUN_EPILOG,
         formatter_class=_HelpFormatter,
@@ -283,6 +309,25 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Optional PNG export path. When used without --session, linework creates "
             "a temporary session, exports the result, and deletes the session."
+        ),
+    )
+    run_parser.add_argument(
+        "--background",
+        help=(
+            "Canvas background color for the temporary session created by --out "
+            "when --session is omitted."
+        ),
+    )
+    run_parser.add_argument(
+        "--width",
+        type=int,
+        help=("Canvas width for the temporary session created by --out when --session is omitted."),
+    )
+    run_parser.add_argument(
+        "--height",
+        type=int,
+        help=(
+            "Canvas height for the temporary session created by --out when --session is omitted."
         ),
     )
     run_parser.add_argument("--json", action="store_true", help="Print JSON output.")
@@ -1146,6 +1191,45 @@ def _emit_created_session_result(result: CreatedSession, *, use_json: bool) -> N
     print(f"Latest render: {result.latest_render}")
 
 
+def _new_output_payload(
+    created: CreatedSession,
+    *,
+    batch_result: BatchResult | None = None,
+) -> dict[str, object]:
+    """Serialize new-session output with optional initial-batch metadata."""
+    payload = created.to_dict()
+    if batch_result is not None:
+        payload.update(
+            {
+                "applied": batch_result.applied,
+                "failed": batch_result.failed,
+                "results": batch_result.results,
+                "scene_object_count": batch_result.scene_object_count,
+            }
+        )
+    return payload
+
+
+def _emit_new_session_result(
+    *,
+    created: CreatedSession,
+    use_json: bool,
+    batch_result: BatchResult | None = None,
+) -> int:
+    """Emit output for a new session, optionally seeded from an initial batch."""
+    if use_json:
+        print(json.dumps(_new_output_payload(created, batch_result=batch_result), indent=2))
+        return 1 if batch_result is not None and batch_result.failed is not None else 0
+
+    _emit_created_session_result(created, use_json=False)
+    if batch_result is not None:
+        print(f"Applied {batch_result.applied} operation(s)")
+        if batch_result.failed:
+            print(f"Failed: {batch_result.failed['op']}: {batch_result.failed['error']}")
+        print(f"Objects: {batch_result.scene_object_count}")
+    return 1 if batch_result is not None and batch_result.failed is not None else 0
+
+
 def _emit_batch_result(
     *,
     result: BatchResult,
@@ -1475,6 +1559,15 @@ def cmd_schema(args: argparse.Namespace) -> int:
 def cmd_new(args: argparse.Namespace) -> int:
     """Handle ``linework new``."""
     try:
+        initial_batch: list[dict[str, object]] | None = None
+        if args.file is not None:
+            initial_batch = _read_jsonl(args.file)
+        elif args.stdin:
+            initial_batch = _read_jsonl(None)
+    except (OSError, ValueError) as exc:
+        return _error(str(exc), use_json=args.json)
+
+    try:
         result = create_session(
             session=args.session,
             name=args.name,
@@ -1485,6 +1578,13 @@ def cmd_new(args: argparse.Namespace) -> int:
     except (OSError, SessionError, SessionLockedError) as exc:
         return _error(str(exc), use_json=args.json)
 
+    batch_result: BatchResult | None = None
+    if initial_batch is not None:
+        try:
+            batch_result = apply_batch(result.session_path, operations=initial_batch)
+        except (OSError, SessionError, SessionLockedError, SceneEngineError) as exc:
+            return _error(str(exc), use_json=args.json)
+
     if not args.headless:
         try:
             pid = _launch_detached_watcher(
@@ -1493,15 +1593,25 @@ def cmd_new(args: argparse.Namespace) -> int:
             )
         except (OSError, SessionError, WatchError):
             # Watcher is best-effort when launched by default.
-            _emit_created_session_result(result, use_json=args.json)
-            return 0
-        _emit_created_session_result(result, use_json=args.json)
+            return _emit_new_session_result(
+                created=result,
+                use_json=args.json,
+                batch_result=batch_result,
+            )
+        exit_code = _emit_new_session_result(
+            created=result,
+            use_json=args.json,
+            batch_result=batch_result,
+        )
         if not args.json:
             print(f"Watcher opened (pid {pid})")
-        return 0
+        return exit_code
 
-    _emit_created_session_result(result, use_json=args.json)
-    return 0
+    return _emit_new_session_result(
+        created=result,
+        use_json=args.json,
+        batch_result=batch_result,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1518,6 +1628,20 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     if args.session is None and args.out is None:
         return _error("either --session or --out must be provided", use_json=args.json)
+    one_shot_options = [
+        flag
+        for flag, value in (
+            ("--background", args.background),
+            ("--width", args.width),
+            ("--height", args.height),
+        )
+        if value is not None
+    ]
+    if args.session is not None and one_shot_options:
+        return _error(
+            f"{', '.join(one_shot_options)} is only supported with --out when --session is omitted",
+            use_json=args.json,
+        )
 
     try:
         if args.session is not None:
@@ -1534,9 +1658,9 @@ def cmd_run(args: argparse.Namespace) -> int:
             created = create_session(
                 session=str(temp_session),
                 name="one-shot",
-                width=DEFAULT_CANVAS_WIDTH,
-                height=DEFAULT_CANVAS_HEIGHT,
-                background=DEFAULT_CANVAS_BACKGROUND,
+                width=args.width or DEFAULT_CANVAS_WIDTH,
+                height=args.height or DEFAULT_CANVAS_HEIGHT,
+                background=args.background or DEFAULT_CANVAS_BACKGROUND,
             )
             result = apply_batch(created.session_path, operations=operations)
             exported_path = export_session(created.session_path, out=args.out)

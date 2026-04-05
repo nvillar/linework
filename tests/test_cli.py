@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import subprocess
@@ -19,7 +20,11 @@ from linework.storage.session import create_session
 from linework.watch import DEFAULT_INTERVAL_MS, WatchError, WatchUnavailableError
 
 
-def run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+def run_cli(
+    *args: str,
+    env: dict[str, str] | None = None,
+    stdin: str | None = None,
+) -> subprocess.CompletedProcess[str]:
     """Run the linework CLI in a subprocess."""
     command_env = os.environ.copy()
     if env is not None:
@@ -35,6 +40,7 @@ def run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.Complet
         capture_output=True,
         text=True,
         env=command_env,
+        input=stdin,
     )
 
 
@@ -102,6 +108,15 @@ def test_new_help_advertises_headless_flag() -> None:
     assert "--headless" in result.stdout
     assert "--json" in result.stdout
     assert "800x800" in result.stdout
+    assert result.stderr == ""
+
+
+def test_run_help_advertises_background_for_one_shot_mode() -> None:
+    result = run_cli("run", "--help")
+
+    assert result.returncode == 0
+    assert "--background" in result.stdout
+    assert "temporary session" in result.stdout
     assert result.stderr == ""
 
 
@@ -226,6 +241,68 @@ def test_new_uses_explicit_session_path(tmp_path: Path) -> None:
 
     with Image.open(session_path / "render" / "latest.png") as image:
         assert image.size == (800, 800)
+
+
+def test_new_can_seed_session_from_stdin(tmp_path: Path) -> None:
+    session_path = tmp_path / "seeded-session"
+    result = run_cli(
+        "new",
+        "--session",
+        str(session_path),
+        "--stdin",
+        "--json",
+        env={"LINEWORK_HOME": str(tmp_path / "linework-home")},
+        stdin='{"op":"draw.rect","payload":{"x":10,"y":10,"width":40,"height":20,"fill":"#FF0000"}}\n',
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["session_path"] == str(session_path)
+    assert payload["applied"] == 1
+    assert payload["scene_object_count"] == 1
+    scene_json = json.loads((session_path / "scene.json").read_text(encoding="utf-8"))
+    assert len(scene_json["objects"]) == 1
+
+
+def test_new_can_seed_session_from_file(tmp_path: Path) -> None:
+    session_path = tmp_path / "seeded-session-file"
+    ops_path = tmp_path / "ops.jsonl"
+    ops_path.write_text(
+        '{"op":"draw.circle","payload":{"x":20,"y":20,"radius":16,"fill":"#00FF00"}}\n',
+        encoding="utf-8",
+    )
+    result = run_cli(
+        "new",
+        "--session",
+        str(session_path),
+        "--file",
+        str(ops_path),
+        "--json",
+        env={"LINEWORK_HOME": str(tmp_path / "linework-home")},
+    )
+
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["applied"] == 1
+    scene_json = json.loads((session_path / "scene.json").read_text(encoding="utf-8"))
+    assert len(scene_json["objects"]) == 1
+
+
+def test_new_rejects_file_and_stdin_together(tmp_path: Path) -> None:
+    ops_path = tmp_path / "ops.jsonl"
+    ops_path.write_text("", encoding="utf-8")
+    result = run_cli(
+        "new",
+        "--session",
+        str(tmp_path / "mixed-session"),
+        "--file",
+        str(ops_path),
+        "--stdin",
+        env={"LINEWORK_HOME": str(tmp_path / "linework-home")},
+    )
+
+    assert result.returncode == 2
+    assert "not allowed with argument" in result.stderr
 
 
 def test_new_without_session_uses_linework_home(tmp_path: Path) -> None:
@@ -365,6 +442,43 @@ def test_new_launches_watcher_by_default(
     }
     assert f"Session path: {session_path}" in captured.out
     assert "pid 42000" in captured.out
+    assert captured.err == ""
+
+
+def test_new_with_initial_batch_launches_watcher_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from linework import cli
+
+    session_path = tmp_path / "seeded-session"
+    seen: dict[str, object] = {}
+
+    def fake_launch(session: str, *, interval_ms: int) -> int:
+        watched_path = Path(session)
+        seen["session"] = watched_path
+        seen["interval_ms"] = interval_ms
+        scene_json = json.loads((watched_path / "scene.json").read_text(encoding="utf-8"))
+        seen["object_count"] = len(scene_json["objects"])
+        return 43000
+
+    monkeypatch.setattr(cli, "_launch_detached_watcher", fake_launch)
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        io.StringIO('{"op":"draw.rect","payload":{"x":10,"y":10,"width":40,"height":20}}\n'),
+    )
+
+    exit_code = cli.main(["new", "--session", str(session_path), "--stdin"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert seen == {
+        "session": session_path,
+        "interval_ms": DEFAULT_INTERVAL_MS,
+        "object_count": 1,
+    }
+    assert f"Session path: {session_path}" in captured.out
+    assert "pid 43000" in captured.out
     assert captured.err == ""
 
 

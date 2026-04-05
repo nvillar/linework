@@ -21,11 +21,22 @@ SCHEMA_DISCOVERY_SUMMARY = (
     "`linework schema --json` for the full manifest."
 )
 
+WORKFLOW_GUIDANCE_SUMMARY = (
+    "Use `linework new` for persistent sessions and live watcher workflows. "
+    "Use `linework run --out` for disposable headless exports."
+)
+
 _SCHEMA_DISCOVERY_COMMANDS = (
     ("linework schema", "quick overview"),
     ("linework schema draw.arrow", "detailed one-op reference"),
     ("linework schema --json draw.arrow", "exact JSON for one op"),
     ("linework schema --json", "full manifest"),
+)
+
+_WORKFLOW_GUIDANCE_COMMANDS = (
+    ("linework new --name idea-board", "persistent session; watcher opens by default"),
+    ("linework new --stdin --name idea-board", "create a watched session from an initial batch"),
+    ("linework run --file ops.jsonl --out out.png", "disposable one-shot export"),
 )
 
 
@@ -38,6 +49,15 @@ def format_schema_discovery_commands(*, indent: str = "") -> str:
     )
 
 
+def format_workflow_guidance_commands(*, indent: str = "") -> str:
+    """Return aligned workflow-choice commands for help text."""
+    command_width = max(len(command) for command, _ in _WORKFLOW_GUIDANCE_COMMANDS)
+    return "\n".join(
+        f"{indent}{command:<{command_width}}  # {description}"
+        for command, description in _WORKFLOW_GUIDANCE_COMMANDS
+    )
+
+
 BOOTSTRAP_TEXT = f"""\
 linework: agent-first CLI sketch tool
 
@@ -46,27 +66,31 @@ Every drawing lives in an explicit session directory. JSONL batch operations are
 the primary interface, with convenience commands for common single-object edits.
 {_DEFAULTS_LINE}
 {SCHEMA_DISCOVERY_SUMMARY}
+{WORKFLOW_GUIDANCE_SUMMARY}
 
 Golden path:
   1. Discover capabilities
 {format_schema_discovery_commands(indent="     ")}
 
-  2. Create a session (opens a watcher window for the user)
+  2. Pick a workflow
+{format_workflow_guidance_commands(indent="     ")}
+
+  3. Create a session (opens a watcher window for the user)
      linework new --name idea-board --json
 
-  3. Draw via JSONL batch (primary interface)
-     linework run --session PATH --json < ops.jsonl
+  4. Draw via JSONL batch (primary interface)
+      linework run --session PATH --json < ops.jsonl
 
-  4. Inspect the scene to discover IDs and labels before editing
-     linework inspect --session PATH --json
+  5. Inspect the scene to discover IDs and labels before editing
+      linework inspect --session PATH --json
 
-  5. Edit or delete one object
-     linework edit rect --session PATH --id obj_000001 --fill #CCE5FF --json
-     linework delete --session PATH --label note-box --json
+  6. Edit or delete one object
+      linework edit rect --session PATH --id obj_000001 --fill #CCE5FF --json
+      linework delete --session PATH --label note-box --json
 
-  6. Export
-     linework export --session PATH --out out.png
-     linework run --file ops.jsonl --out out.png
+  7. Export
+      linework export --session PATH --out out.png
+      linework run --file ops.jsonl --out out.png --width 1200 --height 800
 
 JSONL reference (pipe to linework run --session PATH --json):
   {{"op":"draw.line","payload":{{"x1":0,"y1":0,"x2":200,"y2":100}}}}
@@ -97,8 +121,8 @@ Selection:
 
 Commands:
   linework schema       Print compact overview, one-op reference, or full manifest
-  linework new          Create a new session
-  linework run          Apply JSONL operations (primary interface)
+  linework new          Create a new session (optionally seeded from JSONL)
+  linework run          Apply JSONL operations or do a one-shot export
   linework inspect      Read current scene state
   linework export       Export PNG to a path
   linework watch        Open a read-only watcher window

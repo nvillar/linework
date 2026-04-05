@@ -125,8 +125,8 @@ Current user-facing command surface:
 - `linework` (no-arg bootstrap)
 - `linework --version` (with best-effort update check)
 - `linework schema [OP]` (compact overview, one-op detail, or `--json` manifest)
-- `linework new`
-- `linework run` (JSONL batch — primary agent interface)
+- `linework new` (persistent session creation, optionally seeded from JSONL)
+- `linework run` (JSONL batch — primary agent interface, plus disposable one-shot export)
 - `linework inspect`
 - `linework export`
 - `linework watch`
@@ -141,7 +141,8 @@ Internal engine capabilities:
 - tiered schema discovery: compact overview, per-operation detail, and full JSON manifest
 - JSONL batch execution with single-render-at-end semantics
 - batch-aware undo grouping for `linework run`
-- one-shot batch export via `linework run --out`
+- watched session seeding via `linework new --file` / `linework new --stdin`
+- one-shot batch export via `linework run --out` with optional temporary width / height / background overrides
 - scene replay from command history
 - PNG rendering for all supported primitives
 - arrow rendering with configurable arrowhead placement and size
@@ -162,10 +163,11 @@ Implementation notes:
 - `linework new` now defaults to an `800x800` canvas
 - no-arg `linework`, `linework --help`, and `linework schema` now give consistent discovery advice: quick overview first, one-operation detail as needed, and `linework schema --json` as the full reference
 - `draw.circle` / `edit.circle` accept `x`, `y`, and `radius`, but the stored scene object type remains `ellipse`
-- `linework run --out` can export either an existing session or a temporary throwaway batch result
+- workflow guidance now consistently recommends `linework new` for persistent watched sessions and `linework run --out` for disposable headless exports
+- `linework new` opens the watcher by default; pass `--headless` to suppress; watcher failure is silent; `--file` / `--stdin` seed the session before watcher launch
+- `linework run --out` can export either an existing session or a temporary throwaway batch result, and `--width`, `--height`, and `--background` customize the temporary canvas when `--session` is omitted
 - `draw.arrow` / `edit.arrow` support `arrowhead` (`end`, `start`, `both`, `none`) and optional pixel-sized `arrow_size`
 - text objects now support horizontal `anchor` plus width-based wrapping via `max_width`
-- `linework new` opens the watcher by default; pass `--headless` to suppress; watcher failure is silent
 - `linework edit` can select by label when `--id` is omitted; use `--id` when relabeling
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 - version is derived from git tags via `hatch-vcs`; there is no hardcoded version string (see copilot-instructions §6)
