@@ -1210,15 +1210,24 @@ def _new_output_payload(
     return payload
 
 
+def _watcher_hint_command(session_path: str) -> str:
+    """Return the plain watch command for copy-paste when auto-launch fails."""
+    return f"linework watch --session {session_path}"
+
+
 def _emit_new_session_result(
     *,
     created: CreatedSession,
     use_json: bool,
     batch_result: BatchResult | None = None,
+    watcher_hint: str | None = None,
 ) -> int:
     """Emit output for a new session, optionally seeded from an initial batch."""
     if use_json:
-        print(json.dumps(_new_output_payload(created, batch_result=batch_result), indent=2))
+        payload = _new_output_payload(created, batch_result=batch_result)
+        if watcher_hint is not None:
+            payload["watcher_hint"] = watcher_hint
+        print(json.dumps(payload, indent=2))
         return 1 if batch_result is not None and batch_result.failed is not None else 0
 
     _emit_created_session_result(created, use_json=False)
@@ -1227,6 +1236,9 @@ def _emit_new_session_result(
         if batch_result.failed:
             print(f"Failed: {batch_result.failed['op']}: {batch_result.failed['error']}")
         print(f"Objects: {batch_result.scene_object_count}")
+    if watcher_hint is not None:
+        print("Watcher unavailable. To open it manually from a terminal:")
+        print(watcher_hint)
     return 1 if batch_result is not None and batch_result.failed is not None else 0
 
 
@@ -1593,11 +1605,12 @@ def cmd_new(args: argparse.Namespace) -> int:
                 interval_ms=DEFAULT_INTERVAL_MS,
             )
         except (OSError, SessionError, WatchError):
-            # Watcher is best-effort when launched by default.
+            # Watcher is best-effort; session creation still succeeds.
             return _emit_new_session_result(
                 created=result,
                 use_json=args.json,
                 batch_result=batch_result,
+                watcher_hint=_watcher_hint_command(result.session_path),
             )
         exit_code = _emit_new_session_result(
             created=result,
@@ -1797,8 +1810,17 @@ def cmd_watch(args: argparse.Namespace) -> int:
     """Handle ``linework watch`` by launching a detached watcher process."""
     try:
         pid = _launch_detached_watcher(args.session, interval_ms=args.interval_ms)
-    except (OSError, SessionError, WatchError) as exc:
+    except (OSError, SessionError) as exc:
         return _error(str(exc), use_json=False)
+    except WatchError:
+        hint = _watcher_hint_command(args.session)
+        print(
+            "Watcher unavailable in this environment. "
+            "Ask the user to run this command from a terminal:",
+            file=sys.stderr,
+        )
+        print(hint, file=sys.stderr)
+        return 1
     print(f"Watcher opened (pid {pid})")
     return 0
 

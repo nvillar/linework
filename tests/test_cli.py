@@ -490,7 +490,7 @@ def test_new_with_initial_batch_launches_watcher_by_default(
     assert captured.err == ""
 
 
-def test_new_silently_succeeds_when_watcher_fails(
+def test_new_emits_watcher_hint_when_watcher_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     from linework import cli
@@ -509,7 +509,29 @@ def test_new_silently_succeeds_when_watcher_fails(
     payload = json.loads(captured.out)
     assert payload["session_path"] == str(session_path)
     assert payload["session_id"] == "watched-session"
+    assert payload["watcher_hint"] == f"linework watch --session {session_path}"
     assert (session_path / "render" / "latest.png").is_file()
+    assert captured.err == ""
+
+
+def test_new_plaintext_emits_watcher_hint_when_watcher_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from linework import cli
+
+    session_path = tmp_path / "watched-session"
+
+    def fake_launch(session: str, *, interval_ms: int) -> int:
+        raise WatchUnavailableError("tkinter is unavailable in the active Python environment")
+
+    monkeypatch.setattr(cli, "_launch_detached_watcher", fake_launch)
+
+    exit_code = cli.main(["new", "--session", str(session_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert "Watcher unavailable" in captured.out
+    assert f"linework watch --session {session_path}" in captured.out
     assert captured.err == ""
 
 
@@ -618,6 +640,34 @@ def test_watch_impl_writes_error_status_when_startup_fails(
         "error": "tkinter is unavailable in the active Python environment",
     }
     assert "tkinter is unavailable in the active Python environment" in captured.err
+
+
+def test_watch_emits_hint_when_watcher_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from linework import cli
+
+    session_path = tmp_path / "watch-session"
+    create_session(
+        session=str(session_path),
+        name=None,
+        width=800,
+        height=800,
+        background="#FFFFFF",
+    )
+
+    def fake_launch(session: str, *, interval_ms: int) -> int:
+        raise WatchUnavailableError("tkinter is unavailable in the active Python environment")
+
+    monkeypatch.setattr(cli, "_launch_detached_watcher", fake_launch)
+
+    exit_code = cli.main(["watch", "--session", str(session_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "Watcher unavailable" in captured.err
+    assert f"linework watch --session {session_path}" in captured.err
+    assert captured.out == ""
 
 
 def test_launch_detached_watcher_waits_for_ready_status(
