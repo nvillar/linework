@@ -48,8 +48,9 @@ Use the linework CLI to draw a self-portrait, and open a watch for me to follow 
 Or, more explicitly: 
 
 ```
-You have access to the `linework` CLI for creating drawings and diagrams. Run `linework` with no arguments to learn how it works.
-Start by creating a session, then draw a self-portrait. Open a watch for me to follow your progress.
+You have access to the `linework` CLI for creating drawings and diagrams. Run
+`linework` with no arguments to learn how it works. Start by creating a session,
+then draw a self-portrait. Open a watch for me to follow your progress.
 ```
 
 The agent will read the built-in bootstrap guide, create a session, and start
