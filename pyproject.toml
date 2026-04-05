@@ -13,6 +13,7 @@ authors = [
   { name = "Nicolas Villar" },
 ]
 dependencies = [
+    "packaging>=24.0",
     "pillow>=12.2.0",
 ]
 

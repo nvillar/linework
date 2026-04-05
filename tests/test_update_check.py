@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from importlib.metadata import requires
 from unittest.mock import patch
 
 from linework.update_check import _parse_latest_tag, _update_command, check_for_update
@@ -15,6 +16,12 @@ def test_parse_latest_tag_picks_highest() -> None:
 def test_parse_latest_tag_returns_none_for_no_tags() -> None:
     assert _parse_latest_tag("") is None
     assert _parse_latest_tag("aaa\trefs/heads/main\n") is None
+
+
+def test_runtime_metadata_includes_packaging_dependency() -> None:
+    requirements = requires("linework")
+    assert requirements is not None
+    assert any(requirement.startswith("packaging") for requirement in requirements)
 
 
 def test_update_command_unix() -> None:

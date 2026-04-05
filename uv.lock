@@ -45,6 +45,7 @@ wheels = [
 name = "linework"
 source = { editable = "." }
 dependencies = [
+    { name = "packaging" },
     { name = "pillow" },
 ]
 
@@ -56,7 +57,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "pillow", specifier = ">=12.2.0" }]
+requires-dist = [
+    { name = "packaging", specifier = ">=24.0" },
+    { name = "pillow", specifier = ">=12.2.0" },
+]
 
 [package.metadata.requires-dev]
 dev = [
