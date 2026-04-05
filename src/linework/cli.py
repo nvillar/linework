@@ -40,7 +40,12 @@ from linework.storage.session import (
     export_session,
     inspect_session,
 )
-from linework.watch import DEFAULT_INTERVAL_MS, WatchError, create_session_watcher
+from linework.watch import (
+    DEFAULT_INTERVAL_MS,
+    WatchError,
+    WatchUnavailableError,
+    create_session_watcher,
+)
 
 
 class _HelpFormatter(
@@ -76,7 +81,8 @@ Examples:
   cat ops.jsonl | linework new --stdin --name idea-board --json
   linework new --width {DEFAULT_CANVAS_WIDTH} --height {DEFAULT_CANVAS_HEIGHT}
 
-The output includes a watch_command for opening a live watcher window.
+JSON output includes a watch_command field. Plaintext output prints a Watch:
+line for opening a live watcher window.
 """
 
 _RUN_EPILOG = """\
@@ -1776,7 +1782,7 @@ def cmd_watch(args: argparse.Namespace) -> int:
         pid = _launch_detached_watcher(args.session, interval_ms=args.interval_ms)
     except (OSError, SessionError) as exc:
         return _error(str(exc), use_json=False)
-    except WatchError:
+    except WatchUnavailableError:
         print(
             "Watcher unavailable in this environment. "
             "Ask the user to run this command from a terminal:",
@@ -1787,6 +1793,8 @@ def cmd_watch(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    except WatchError as exc:
+        return _error(str(exc), use_json=False)
     print(f"Watcher opened (pid {pid})")
     return 0
 
@@ -1800,6 +1808,7 @@ def _cmd_watch_impl(args: argparse.Namespace) -> int:
             args.startup_status,
             status="error",
             error=str(exc),
+            error_kind="unavailable" if isinstance(exc, WatchUnavailableError) else None,
         )
         return _error(str(exc), use_json=False)
     _write_watcher_startup_status(args.startup_status, status="ready")
@@ -1812,6 +1821,7 @@ def _write_watcher_startup_status(
     *,
     status: str,
     error: str | None = None,
+    error_kind: str | None = None,
 ) -> None:
     """Write the detached watcher startup status for the parent process."""
     if status_path is None:
@@ -1822,6 +1832,8 @@ def _write_watcher_startup_status(
     payload: dict[str, str] = {"status": status}
     if error is not None:
         payload["error"] = error
+    if error_kind is not None:
+        payload["error_kind"] = error_kind
     temp_path.write_text(json.dumps(payload), encoding="utf-8")
     temp_path.replace(path)
 
@@ -1844,7 +1856,7 @@ def _read_watcher_startup_status(status_path: Path) -> dict[str, str] | None:
         raise WatchError("watcher returned invalid startup status")
 
     normalized: dict[str, str] = {}
-    for key in ("status", "error"):
+    for key in ("status", "error", "error_kind"):
         value = payload.get(key)
         if value is None:
             continue
@@ -1863,6 +1875,8 @@ def _await_watcher_startup(process: _WatchedProcess, status_path: Path) -> None:
             if payload.get("status") == "ready":
                 return
             error = payload.get("error", "watcher failed to start")
+            if payload.get("error_kind") == "unavailable":
+                raise WatchUnavailableError(error)
             raise WatchError(error)
 
         exit_code = process.poll()
@@ -1929,7 +1943,7 @@ def _ensure_windows_interactive_desktop() -> None:
 
     desktop = open_input_desktop(0, False, DESKTOP_READOBJECTS)
     if not desktop:
-        raise WatchError("watcher requires an interactive Windows desktop session")
+        raise WatchUnavailableError("watcher requires an interactive Windows desktop session")
 
     close_desktop(desktop)
 

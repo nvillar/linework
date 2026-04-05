@@ -101,6 +101,7 @@ def test_new_help_advertises_watch_command() -> None:
 
     assert result.returncode == 0
     assert "watch_command" in result.stdout
+    assert "Plaintext output prints a Watch:" in result.stdout
     assert "--json" in result.stdout
     assert "800x800" in result.stdout
     assert result.stderr == ""
@@ -514,6 +515,7 @@ def test_watch_impl_writes_error_status_when_startup_fails(
     assert json.loads(status_path.read_text(encoding="utf-8")) == {
         "status": "error",
         "error": "tkinter is unavailable in the active Python environment",
+        "error_kind": "unavailable",
     }
     assert "tkinter is unavailable in the active Python environment" in captured.err
 
@@ -543,6 +545,34 @@ def test_watch_emits_hint_when_watcher_unavailable(
     assert exit_code == 1
     assert "Watcher unavailable" in captured.err
     assert f"linework watch --session {session_path}" in captured.err
+    assert captured.out == ""
+
+
+def test_watch_preserves_generic_startup_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from linework import cli
+
+    session_path = tmp_path / "watch-session"
+    create_session(
+        session=str(session_path),
+        name=None,
+        width=800,
+        height=800,
+        background="#FFFFFF",
+    )
+
+    def fake_launch(session: str, *, interval_ms: int) -> int:
+        raise WatchError("watcher startup failed")
+
+    monkeypatch.setattr(cli, "_launch_detached_watcher", fake_launch)
+
+    exit_code = cli.main(["watch", "--session", str(session_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "watcher startup failed" in captured.err
+    assert "Watcher unavailable" not in captured.err
     assert captured.out == ""
 
 
@@ -628,6 +658,48 @@ def test_launch_detached_watcher_raises_startup_error(
     monkeypatch.setattr(cli, "_launch_detached_watcher_posix", fake_launcher)
 
     with pytest.raises(WatchError, match="watcher startup failed"):
+        cli._launch_detached_watcher(str(session_path))
+
+
+def test_launch_detached_watcher_preserves_unavailable_startup_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from linework import cli
+
+    session_path = tmp_path / "watch-session"
+    create_session(
+        session=str(session_path),
+        name=None,
+        width=800,
+        height=800,
+        background="#FFFFFF",
+    )
+
+    class FakeProcess:
+        pid = 32103
+
+        def poll(self) -> int | None:
+            return None
+
+    def fake_launcher(cmd: object) -> FakeProcess:
+        cmd_list = list(cmd)  # type: ignore[arg-type]
+        status_path = Path(cmd_list[cmd_list.index("--startup-status") + 1])
+        status_path.write_text(
+            json.dumps(
+                {
+                    "status": "error",
+                    "error": "watcher requires an interactive Windows desktop session",
+                    "error_kind": "unavailable",
+                }
+            ),
+            encoding="utf-8",
+        )
+        return FakeProcess()
+
+    monkeypatch.setattr(cli, "_launch_detached_watcher_windows", fake_launcher)
+    monkeypatch.setattr(cli, "_launch_detached_watcher_posix", fake_launcher)
+
+    with pytest.raises(WatchUnavailableError, match="interactive Windows desktop session"):
         cli._launch_detached_watcher(str(session_path))
 
 
