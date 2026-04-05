@@ -48,22 +48,13 @@ Use the linework CLI to draw a self-portrait, and open a watch for me to follow 
 Or, more explicitly: 
 
 ```
-You have access to the `linework` CLI for creating drawings and diagrams.
-Run `linework` with no arguments to learn how it works.
-Start by creating a session, then draw a self-portrait.
-Open a watch for me to follow your progress.
+You have access to the `linework` CLI for creating drawings and diagrams. Run `linework` with no arguments to learn how it works.
+Start by creating a session, then draw a self-portrait. Open a watch for me to follow your progress.
 ```
 
 The agent will read the built-in bootstrap guide, create a session, and start
-drawing. If you want to watch it work, ask it to open the watcher — or run
-`linework watch --session PATH` yourself.
-
-For iterative work, steer it toward `linework new` and `linework watch`.
-For a throwaway file with no watcher, steer it toward `linework run --out`.
-
-The agent might take some time to first explore the tool, learn how it works, 
-and finally put together a drawing. Making changes should be much faster, and
-you can watch the drawing update on the watcher window.
+drawing. If you want to watch it work ask it to open the watcher, or you can ask it to 
+work in the background and save or return the resulting PNG.
 
 If the agent supports memory, you can ask it to remember about the tool and how
 to use it to avoid having to learn it every time.
