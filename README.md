@@ -1,7 +1,7 @@
 # `linework`
 
-`linework` is a simple sketching tool for agents that allows them to draw 
-shapes, place text, build diagrams, and export PNGs from the command line. 
+`linework` is a command-line drawing tool for agents that allows them to create 
+and edit shapes, place text, build diagrams, and export PNGs from the command line. 
 
 `linework` keeps the underlying drawing objects, allowing an agent to
 tweak things (*make the red box wider, change the background, relabel
