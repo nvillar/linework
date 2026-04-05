@@ -25,12 +25,16 @@ def _parse_latest_tag(ls_remote_output: str) -> str | None:
     return str(best) if best is not None else None
 
 
-def _update_command() -> str:
-    """Return the platform-appropriate ``uv tool install`` command."""
-    source = f"git+{_REPO_URL}"
+def _update_command(version: str) -> str:
+    """Return the platform-appropriate command for installing a tagged release.
+
+    ``--no-cache`` and ``--reinstall-package`` force a fresh rebuild so the
+    Git-installed tool picks up the tag-derived version from ``hatch-vcs``.
+    """
+    source = f"git+{_REPO_URL}@v{version}"
     if sys.platform == "win32":
-        return f"uv tool install --link-mode copy {source}"
-    return f"uv tool install {source}"
+        return f"uv tool install --no-cache --reinstall-package linework --link-mode copy {source}"
+    return f"uv tool install --no-cache --reinstall-package linework {source}"
 
 
 def check_for_update(current_version: str) -> str | None:
@@ -56,7 +60,7 @@ def check_for_update(current_version: str) -> str | None:
             return None
 
         if Version(latest) > Version(current_version):
-            return f"Update available: {current_version} → {latest}\n{_update_command()}"
+            return f"Update available: {current_version} → {latest}\n{_update_command(latest)}"
     except Exception:  # noqa: BLE001
         pass
     return None

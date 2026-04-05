@@ -20,16 +20,22 @@ def test_parse_latest_tag_returns_none_for_no_tags() -> None:
 def test_update_command_unix() -> None:
     with patch("linework.update_check.sys") as mock_sys:
         mock_sys.platform = "darwin"
-        cmd = _update_command()
-    assert cmd == "uv tool install git+https://github.com/nvillar/linework.git"
+        cmd = _update_command("0.2.0")
+    assert (
+        cmd == "uv tool install --no-cache --reinstall-package linework "
+        "git+https://github.com/nvillar/linework.git@v0.2.0"
+    )
     assert "--link-mode" not in cmd
 
 
 def test_update_command_windows() -> None:
     with patch("linework.update_check.sys") as mock_sys:
         mock_sys.platform = "win32"
-        cmd = _update_command()
+        cmd = _update_command("0.2.0")
     assert "--link-mode copy" in cmd
+    assert "--no-cache" in cmd
+    assert "--reinstall-package linework" in cmd
+    assert cmd.endswith("git+https://github.com/nvillar/linework.git@v0.2.0")
 
 
 def test_check_for_update_returns_hint_when_newer() -> None:
@@ -41,7 +47,8 @@ def test_check_for_update_returns_hint_when_newer() -> None:
     assert hint is not None
     assert "0.1.0" in hint
     assert "1.0.0" in hint
-    assert "uv tool install" in hint
+    assert "uv tool install --no-cache --reinstall-package linework" in hint
+    assert "@v1.0.0" in hint
 
 
 def test_check_for_update_returns_none_when_current() -> None:

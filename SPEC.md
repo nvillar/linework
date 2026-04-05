@@ -43,7 +43,7 @@ The implementation must follow these principles:
 The package must be installable as a tool from GitHub using `uv tool install`, in the form:
 
 ```bash
-uv tool install git+https://github.com/nvillar/linework.git
+uv tool install --no-cache --reinstall-package linework git+https://github.com/nvillar/linework.git
 ```
 
 That implies:
@@ -436,7 +436,7 @@ The convenience commands are thin wrappers. Every operation they perform is also
 
 Invoking `linework` with no arguments must print a rich bootstrap guide and exit successfully.
 
-`linework --version` must print the installed package version and exit successfully. It should perform a best-effort update check against the remote repository; if a newer release tag exists, it prints a platform-appropriate `uv tool install` command that the user can copy and paste. The check must fail silently on network errors or timeouts.
+`linework --version` must print the installed package version and exit successfully. It should perform a best-effort update check against the remote repository; if a newer release tag exists, it prints a platform-appropriate `uv tool install` command that the user can copy and paste. The suggested command must force a fresh rebuild and pin the Git URL to the latest release tag so the installed tool picks up the correct tag-derived version. The check must fail silently on network errors or timeouts.
 
 The bootstrap output must explain:
 

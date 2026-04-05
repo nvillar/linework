@@ -23,12 +23,12 @@ opens to show the drawing come together in real time. The agent can also use
 
 On Windows:
 ```bash
-uv tool install --link-mode copy git+https://github.com/nvillar/linework.git
+uv tool install --no-cache --reinstall-package linework --link-mode copy git+https://github.com/nvillar/linework.git
 ```
 
 On macOS:
 ```bash
-uv tool install git+https://github.com/nvillar/linework.git
+uv tool install --no-cache --reinstall-package linework git+https://github.com/nvillar/linework.git
 ```
 Or point your agent to this page and ask it to install `linework`.
 
