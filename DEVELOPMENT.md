@@ -123,7 +123,7 @@ Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10.
 Current user-facing command surface:
 
 - `linework` (no-arg bootstrap)
-- `linework --version`
+- `linework --version` (with best-effort update check)
 - `linework schema [OP]` (compact overview, one-op detail, or `--json` manifest)
 - `linework new`
 - `linework run` (JSONL batch — primary agent interface)
@@ -153,7 +153,7 @@ Internal engine capabilities:
 - fixture-based regression harness for blank, shapes, polygon, text, image, agent UX, undo/edit/delete, and batch cases
 - automated packaging/build validation plus isolated `uv tool install` validation
 - structured `--json` output and `--json` error output for all mutation commands (`linework watch` is display-only and does not use `--json`)
-- richer bootstrap text and subcommand help with an inspect → edit/delete golden path
+- best-effort update check on `linework --version` with platform-aware update command
 
 Implementation notes:
 
@@ -169,6 +169,7 @@ Implementation notes:
 - `linework edit` can select by label when `--id` is omitted; use `--id` when relabeling
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 - version is derived from git tags via `hatch-vcs`; there is no hardcoded version string (see copilot-instructions §6)
+- `linework --version` checks the remote repo for newer tags via `git ls-remote` (5s timeout, best-effort); shows a platform-aware `uv tool install` command if an update is available
 - Windows: `_is_pid_alive` uses Win32 `OpenProcess` API instead of `os.kill(pid, 0)` (which sends `CTRL_C_EVENT` on Windows)
 
 Next milestone: **TBD.** Deferred future directions are canvas resize / fit-to-contents, grouping, auto-layout, higher-level composites, and themes / reusable styles.

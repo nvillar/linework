@@ -415,7 +415,7 @@ The MVP CLI has two tiers of commands:
 **Core commands** (the agent loop):
 
 - `linework` — bootstrap guide
-- `linework --version` — print the installed version
+- `linework --version` — print the installed version and check for updates
 - `linework schema` — capability overview, one-op detail, or full JSON manifest
 - `linework new` — create a session
 - `linework run` — batch operations via JSONL (primary mutation interface)
@@ -436,7 +436,7 @@ The convenience commands are thin wrappers. Every operation they perform is also
 
 Invoking `linework` with no arguments must print a rich bootstrap guide and exit successfully.
 
-`linework --version` must print the installed package version and exit successfully.
+`linework --version` must print the installed package version and exit successfully. It should perform a best-effort update check against the remote repository; if a newer release tag exists, it prints a platform-appropriate `uv tool install` command that the user can copy and paste. The check must fail silently on network errors or timeouts.
 
 The bootstrap output must explain:
 
