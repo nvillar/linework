@@ -26,7 +26,8 @@ from linework.constants import (
     DEFAULT_CANVAS_BACKGROUND,
     DEFAULT_CANVAS_HEIGHT,
     DEFAULT_CANVAS_WIDTH,
-    TEXT_ANCHORS,
+    TEXT_ALIGNS,
+    TEXT_VALIGNS,
 )
 from linework.core.errors import SceneEngineError
 from linework.storage.lock import SessionLockedError
@@ -597,8 +598,15 @@ def _add_rect_like_geometry(parser: argparse.ArgumentParser, *, required: bool) 
 
 def _add_text_geometry(parser: argparse.ArgumentParser, *, required: bool) -> None:
     """Add text geometry arguments."""
-    parser.add_argument("--x", type=float, required=required, help="Text x coordinate.")
-    parser.add_argument("--y", type=float, required=required, help="Text y coordinate.")
+    parser.add_argument("--x", type=float, required=required, help="Top-left x of the text box.")
+    parser.add_argument("--y", type=float, required=required, help="Top-left y of the text box.")
+    parser.add_argument("--width", type=float, required=required, help="Text box width in pixels.")
+    parser.add_argument(
+        "--height",
+        type=float,
+        required=required,
+        help="Text box height in pixels.",
+    )
     parser.add_argument("--text", required=required, help="Text content.")
 
 
@@ -622,17 +630,21 @@ def _add_arrow_size_argument(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_text_layout_arguments(parser: argparse.ArgumentParser) -> None:
-    """Add optional text alignment and wrapping flags."""
+    """Add optional boxed-text layout flags."""
     parser.add_argument(
-        "--anchor",
-        choices=TEXT_ANCHORS,
-        help="Horizontal anchor for the text position.",
+        "--align",
+        choices=TEXT_ALIGNS,
+        help="Horizontal alignment inside the text box.",
     )
     parser.add_argument(
-        "--max-width",
+        "--valign",
+        choices=TEXT_VALIGNS,
+        help="Vertical alignment inside the text box.",
+    )
+    parser.add_argument(
+        "--padding",
         type=float,
-        dest="max_width",
-        help="Wrap text to this maximum rendered width in pixels.",
+        help="Inner padding in pixels.",
     )
 
 
@@ -774,7 +786,7 @@ def _add_draw_text_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     """Add the ``linework draw text`` parser."""
     parser = subparsers.add_parser(
         "text",
-        help="Draw a text label.",
+        help="Draw boxed text.",
         formatter_class=_HelpFormatter,
     )
     _add_session_argument(parser)
@@ -889,7 +901,7 @@ def _add_edit_text_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     """Add the ``linework edit text`` parser."""
     parser = subparsers.add_parser(
         "text",
-        help="Edit a text object.",
+        help="Edit boxed text.",
         formatter_class=_HelpFormatter,
     )
     _add_edit_common_arguments(parser)
@@ -994,13 +1006,20 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
         return payload
 
     if draw_type == "text":
-        payload = {"x": args.x, "y": args.y, "text": args.text}
+        payload = {
+            "x": args.x,
+            "y": args.y,
+            "width": args.width,
+            "height": args.height,
+            "text": args.text,
+        }
         _include_optional_values(
             payload,
             args,
             "size",
-            "anchor",
-            "max_width",
+            "align",
+            "valign",
+            "padding",
             "label",
             "visible",
             "fill",
@@ -1110,10 +1129,13 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             args,
             "x",
             "y",
+            "width",
+            "height",
             "text",
             "size",
-            "anchor",
-            "max_width",
+            "align",
+            "valign",
+            "padding",
             "label",
             "visible",
             "fill",
@@ -1533,8 +1555,12 @@ def cmd_schema(args: argparse.Namespace) -> int:
         f"{_schema_value_text(_schema_field_default(text_optional, 'size'))}, "
         "fill="
         f"{_schema_value_text(_schema_field_default(text_optional, 'fill'))}, "
-        "anchor="
-        f"{_schema_value_text(_schema_field_default(text_optional, 'anchor'))}"
+        "align="
+        f"{_schema_value_text(_schema_field_default(text_optional, 'align'))}, "
+        "valign="
+        f"{_schema_value_text(_schema_field_default(text_optional, 'valign'))}, "
+        "padding="
+        f"{_schema_value_text(_schema_field_default(text_optional, 'padding'))}"
     )
     print()
     print("Rules:")
@@ -1546,7 +1572,8 @@ def cmd_schema(args: argparse.Namespace) -> int:
     print("Special values:")
     print("  colors: #RRGGBB or #RRGGBBAA (alpha-composited in stacking order)")
     print(f"  arrowhead: {', '.join(ARROWHEAD_MODES)} (default: {ARROWHEAD_MODES[0]})")
-    print(f"  anchor: {', '.join(TEXT_ANCHORS)} (default: {TEXT_ANCHORS[0]})")
+    print(f"  align: {', '.join(TEXT_ALIGNS)} (default: center)")
+    print(f"  valign: {', '.join(TEXT_VALIGNS)} (default: middle)")
     print()
     print("Capability discovery:")
     print(format_schema_discovery_commands(indent="  "))
@@ -1740,10 +1767,16 @@ def _format_geometry(obj: dict[str, object]) -> str:
     if obj_type == "text":
         text = str(obj.get("text", ""))
         truncated = text[:20] + "…" if len(text) > 20 else text
-        anchor = str(obj.get("anchor", "left"))
-        max_width = obj.get("max_width")
-        width_text = f" ≤{max_width}" if isinstance(max_width, int | float) else ""
-        return f'({obj.get("x")},{obj.get("y")}) "{truncated}" [{anchor}{width_text}]'
+        align = str(obj.get("align", "center"))
+        valign = str(obj.get("valign", "middle"))
+        padding = obj.get("padding")
+        padding_text = ""
+        if isinstance(padding, int | float) and padding != 0:
+            padding_text = f", pad={padding}"
+        return (
+            f"({obj.get('x')},{obj.get('y')}) {obj.get('width')}×{obj.get('height')} "
+            f'"{truncated}" [{align}/{valign}{padding_text}]'
+        )
     if obj_type == "polyline":
         points = obj.get("points")
         count = len(points) if isinstance(points, list) else 0
@@ -1931,7 +1964,7 @@ def _watch_impl_command() -> list[str]:
     if sys.platform == "win32":
         return [_windows_gui_python_executable(), "-m", "linework", "_watch-impl"]
 
-    argv0 = sys.argv[0] if sys.argv else ""  # type: ignore[unreachable]
+    argv0 = sys.argv[0] if sys.argv else ""
     if argv0.endswith("__main__.py") or not argv0:
         return [sys.executable, "-m", "linework", "_watch-impl"]
 

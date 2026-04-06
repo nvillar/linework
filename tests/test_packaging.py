@@ -104,7 +104,10 @@ def test_uv_tool_install_from_project_runs_installed_cli(tmp_path: Path) -> None
     run_result = _run(
         [str(binary_path), "run", "--session", str(session_path), "--json"],
         env=env,
-        stdin='{"op":"draw.text","payload":{"x":12,"y":16,"text":"pkg","size":18}}\n',
+        stdin=(
+            '{"op":"draw.text","payload":'
+            '{"x":12,"y":16,"width":72,"height":36,"text":"pkg","size":18}}\n'
+        ),
     )
     assert run_result.returncode == 0, run_result.stderr
 

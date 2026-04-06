@@ -321,7 +321,7 @@ def test_edit_rect_json_updates_existing_object(tmp_path: Path) -> None:
     assert scene["objects"][0]["fill"] == "#00FF00"
 
 
-def test_draw_text_accepts_anchor_and_wrap(tmp_path: Path) -> None:
+def test_draw_text_accepts_box_layout(tmp_path: Path) -> None:
     session_path, env = create_cli_session(tmp_path)
 
     result = run_cli(
@@ -333,20 +333,29 @@ def test_draw_text_accepts_anchor_and_wrap(tmp_path: Path) -> None:
         "100",
         "--y",
         "20",
+        "--width",
+        "80",
+        "--height",
+        "60",
         "--text",
         "Wrap this label into multiple lines",
-        "--anchor",
-        "center",
-        "--max-width",
-        "80",
+        "--align",
+        "left",
+        "--valign",
+        "top",
+        "--padding",
+        "6",
         "--json",
         env=env,
     )
 
     assert result.returncode == 0
     scene = read_scene(session_path)
-    assert scene["objects"][0]["anchor"] == "center"
-    assert scene["objects"][0]["max_width"] == 80.0
+    assert scene["objects"][0]["width"] == 80.0
+    assert scene["objects"][0]["height"] == 60.0
+    assert scene["objects"][0]["align"] == "left"
+    assert scene["objects"][0]["valign"] == "top"
+    assert scene["objects"][0]["padding"] == 6.0
 
 
 def test_edit_rect_by_label_updates_unique_object(tmp_path: Path) -> None:
@@ -527,6 +536,10 @@ def test_delete_human_readable_output(tmp_path: Path) -> None:
         "10",
         "--y",
         "15",
+        "--width",
+        "80",
+        "--height",
+        "30",
         "--text",
         "hello",
         env=env,
@@ -562,6 +575,10 @@ def test_delete_by_label_human_readable_output(tmp_path: Path) -> None:
         "10",
         "--y",
         "15",
+        "--width",
+        "80",
+        "--height",
+        "30",
         "--text",
         "hello",
         "--label",
@@ -661,7 +678,7 @@ def test_undo_after_run_batch_removes_the_whole_batch(tmp_path: Path) -> None:
         env={**os.environ, **env},
         input=(
             '{"op":"draw.rect","payload":{"x":10,"y":10,"width":50,"height":30}}\n'
-            '{"op":"draw.text","payload":{"x":20,"y":60,"text":"hi","size":14}}\n'
+            '{"op":"draw.text","payload":{"x":20,"y":60,"width":80,"height":30,"text":"hi","size":14}}\n'
         ),
     )
     assert run_result.returncode == 0

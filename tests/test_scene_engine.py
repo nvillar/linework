@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageChops, ImageDraw
 
-from linework.render.png import load_default_text_font
+from linework.render.png import render_text_object
 from linework.storage.session import (
     apply_batch,
     apply_mutation,
@@ -181,7 +181,7 @@ def test_renderer_supports_multiple_primitives(
     apply_mutation(
         session_path,
         op="draw.text",
-        payload={"x": 20, "y": 70, "text": "hello", "size": 24},
+        payload={"x": 20, "y": 70, "width": 80, "height": 40, "text": "hello", "size": 24},
     )
 
     with Image.open(session_path / "render" / "latest.png") as rendered:
@@ -308,6 +308,8 @@ def test_translucent_text_is_composited_over_existing_scene(
                 "payload": {
                     "x": 20,
                     "y": 20,
+                    "width": 80,
+                    "height": 40,
                     "text": "Hi",
                     "size": 24,
                     "fill": "#00000080",
@@ -317,11 +319,17 @@ def test_translucent_text_is_composited_over_existing_scene(
     )
 
     text_layer = Image.new("RGBA", (200, 160), (0, 0, 0, 0))
-    ImageDraw.Draw(text_layer).text(
-        (20, 20),
-        "Hi",
-        font=load_default_text_font(24),
-        fill=(0, 0, 0, 128),
+    render_text_object(
+        draw=ImageDraw.Draw(text_layer),
+        object_data={
+            "x": 20,
+            "y": 20,
+            "width": 80,
+            "height": 40,
+            "text": "Hi",
+            "size": 24,
+            "fill": "#00000080",
+        },
     )
     sample = next(
         (
@@ -454,7 +462,14 @@ def test_undo_after_batch_removes_the_whole_batch(
             },
             {
                 "op": "draw.text",
-                "payload": {"x": 20, "y": 60, "text": "hello", "size": 16},
+                "payload": {
+                    "x": 20,
+                    "y": 60,
+                    "width": 80,
+                    "height": 30,
+                    "text": "hello",
+                    "size": 16,
+                },
             },
         ],
     )
@@ -480,7 +495,14 @@ def test_undo_inside_batch_only_removes_the_last_batch_operation(
             },
             {
                 "op": "draw.text",
-                "payload": {"x": 20, "y": 60, "text": "hello", "size": 16},
+                "payload": {
+                    "x": 20,
+                    "y": 60,
+                    "width": 80,
+                    "height": 30,
+                    "text": "hello",
+                    "size": 16,
+                },
             },
             {"op": "undo", "payload": {}},
         ],
@@ -542,7 +564,7 @@ def test_draw_image_normalizes_stored_asset_path(
     assert scene.objects[0]["asset_path"] == "assets/sample.png"
 
 
-def test_text_anchor_positions_text_around_x_coordinate(
+def test_text_box_defaults_center_text_in_box(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from linework import config
@@ -553,20 +575,23 @@ def test_text_anchor_positions_text_around_x_coordinate(
     apply_mutation(
         session_path,
         op="draw.text",
-        payload={"x": 100, "y": 20, "text": "Center", "size": 24, "anchor": "center"},
+        payload={"x": 40, "y": 20, "width": 120, "height": 60, "text": "Center", "size": 24},
     )
 
     scene = read_scene_snapshot(session_path)
-    assert scene.objects[0]["anchor"] == "center"
+    assert scene.objects[0]["align"] == "center"
+    assert scene.objects[0]["valign"] == "middle"
 
     with Image.open(session_path / "render" / "latest.png") as rendered:
         bbox = nonwhite_bbox(rendered)
         assert bbox is not None
         center_x = (bbox[0] + bbox[2]) / 2.0
+        center_y = (bbox[1] + bbox[3]) / 2.0
         assert abs(center_x - 100.0) <= 4.0
+        assert abs(center_y - 50.0) <= 4.0
 
 
-def test_text_max_width_wraps_over_multiple_lines(
+def test_text_box_wraps_and_preserves_center_alignment_when_overflowing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from linework import config
@@ -579,21 +604,29 @@ def test_text_max_width_wraps_over_multiple_lines(
         op="draw.text",
         payload={
             "x": 20,
-            "y": 20,
+            "y": 50,
+            "width": 80,
+            "height": 50,
             "text": "wrap this text into multiple rendered lines",
             "size": 20,
-            "max_width": 80,
+            "padding": 5,
         },
     )
 
     scene = read_scene_snapshot(session_path)
-    assert scene.objects[0]["max_width"] == 80.0
+    assert scene.objects[0]["width"] == 80.0
+    assert scene.objects[0]["height"] == 50.0
+    assert scene.objects[0]["padding"] == 5.0
 
     with Image.open(session_path / "render" / "latest.png") as rendered:
         bbox = nonwhite_bbox(rendered)
         assert bbox is not None
         assert bbox[2] - bbox[0] <= 90
-        assert bbox[3] - bbox[1] >= 35
+        assert bbox[3] - bbox[1] > 40
+        center_x = (bbox[0] + bbox[2]) / 2.0
+        center_y = (bbox[1] + bbox[3]) / 2.0
+        assert abs(center_x - 60.0) <= 4.0
+        assert abs(center_y - 75.0) <= 4.0
 
 
 def test_commands_jsonl_is_valid_jsonl_after_mutations(

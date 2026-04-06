@@ -94,7 +94,7 @@ linework new --name demo --file ops.jsonl
 cat <<'EOF' | linework run --session PATH --json
 {"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","label":"box"}}
 {"op":"draw.polygon","payload":{"points":[[300,50],[400,10],[400,90]],"fill":"#FF6666"}}
-{"op":"draw.text","payload":{"x":70,"y":85,"text":"Hello","size":20}}
+{"op":"draw.text","payload":{"x":50,"y":50,"width":200,"height":100,"text":"Hello","size":20}}
 EOF
 
 # Read back what's on the canvas

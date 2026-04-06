@@ -23,11 +23,15 @@
       "id": "obj_000002",
       "type": "text",
       "visible": true,
-      "x": 16.0,
-      "y": 18.0,
+      "x": 10.0,
+      "y": 10.0,
+      "width": 40.0,
+      "height": 30.0,
       "text": "API",
       "size": 16.0,
-      "anchor": "left",
+      "align": "center",
+      "valign": "middle",
+      "padding": 0.0,
       "fill": "#222222"
     },
     {

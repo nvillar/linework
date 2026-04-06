@@ -33,7 +33,7 @@ def _is_pid_alive(pid: int) -> bool:
         return False
     if sys.platform == "win32":
         return _is_pid_alive_windows(pid)
-    try:  # type: ignore[unreachable]
+    try:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False

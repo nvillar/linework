@@ -11,8 +11,11 @@ from linework.constants import (
     DEFAULT_CANVAS_BACKGROUND,
     DEFAULT_CANVAS_HEIGHT,
     DEFAULT_CANVAS_WIDTH,
-    DEFAULT_TEXT_ANCHOR,
-    TEXT_ANCHORS,
+    DEFAULT_TEXT_ALIGN,
+    DEFAULT_TEXT_PADDING,
+    DEFAULT_TEXT_VALIGN,
+    TEXT_ALIGNS,
+    TEXT_VALIGNS,
 )
 
 _MISSING = object()
@@ -56,12 +59,21 @@ _STROKE_FIELD = _field("color", default="#000000", description=_COLOR_DESCRIPTIO
 _FILL_FIELD = _field("color|null", description=_COLOR_DESCRIPTION)
 _STROKE_WIDTH_FIELD = _field("positive-number", default=2.0)
 _TEXT_SIZE_FIELD = _field("positive-number", default=16.0)
-_TEXT_ANCHOR_FIELD = _field(
+_TEXT_ALIGN_FIELD = _field(
     "string",
-    default=DEFAULT_TEXT_ANCHOR,
-    enum=TEXT_ANCHORS,
+    default=DEFAULT_TEXT_ALIGN,
+    enum=TEXT_ALIGNS,
 )
-_TEXT_MAX_WIDTH_FIELD = _field("positive-number|null")
+_TEXT_VALIGN_FIELD = _field(
+    "string",
+    default=DEFAULT_TEXT_VALIGN,
+    enum=TEXT_VALIGNS,
+)
+_TEXT_PADDING_FIELD = _field(
+    "non-negative-number",
+    default=DEFAULT_TEXT_PADDING,
+    description="Inner padding in pixels.",
+)
 _ARROWHEAD_FIELD = _field(
     "string",
     default=DEFAULT_ARROWHEAD,
@@ -230,10 +242,12 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
     "draw.text": {
         "category": "draw",
         "stored_object_type": "text",
-        "description": "Create a text label.",
+        "description": "Create boxed text.",
         "required": {
             "x": _field("number"),
             "y": _field("number"),
+            "width": _field("positive-number"),
+            "height": _field("positive-number"),
             "text": _field("string"),
         },
         "optional": {
@@ -245,17 +259,18 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
                 default="#000000",
                 description=_COLOR_DESCRIPTION,
             ),
-            "anchor": _TEXT_ANCHOR_FIELD,
-            "max_width": _TEXT_MAX_WIDTH_FIELD,
+            "align": _TEXT_ALIGN_FIELD,
+            "valign": _TEXT_VALIGN_FIELD,
+            "padding": _TEXT_PADDING_FIELD,
         },
         "example": _example(
             "draw.text",
             {
                 "x": 60,
-                "y": 220,
+                "y": 180,
+                "width": 160,
+                "height": 80,
                 "text": "Review queue",
-                "anchor": "center",
-                "max_width": 140,
             },
         ),
     },
@@ -405,15 +420,21 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "optional": {
             "x": _field("number"),
             "y": _field("number"),
+            "width": _field("positive-number"),
+            "height": _field("positive-number"),
             "text": _field("string"),
             "size": _TEXT_SIZE_FIELD,
             "label": _LABEL_FIELD,
             "visible": _VISIBLE_FIELD,
             "fill": _field("color|null"),
-            "anchor": _TEXT_ANCHOR_FIELD,
-            "max_width": _TEXT_MAX_WIDTH_FIELD,
+            "align": _TEXT_ALIGN_FIELD,
+            "valign": _TEXT_VALIGN_FIELD,
+            "padding": _TEXT_PADDING_FIELD,
         },
-        "example": _example("edit.text", {"id": "obj_000001", "anchor": "right"}),
+        "example": _example(
+            "edit.text",
+            {"id": "obj_000001", "align": "left", "valign": "top", "padding": 12},
+        ),
     },
     "edit.image": {
         "category": "edit",

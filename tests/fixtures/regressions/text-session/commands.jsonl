@@ -1,2 +1,2 @@
-{"schema_version": 1, "op_id": "op_000001", "timestamp": "2026-04-03T23:21:56Z", "op": "draw.text", "payload": {"x": 18, "y": 18, "text": "Linework", "size": 24, "fill": "#111111", "id": "obj_000001"}}
-{"schema_version": 1, "op_id": "op_000002", "timestamp": "2026-04-03T23:21:56Z", "op": "draw.text", "payload": {"x": 18, "y": 52, "text": "deterministic", "size": 18, "fill": "#0055AA", "id": "obj_000002"}}
+{"schema_version": 1, "op_id": "op_000001", "timestamp": "2026-04-03T23:21:56Z", "op": "draw.text", "payload": {"x": 18, "y": 12, "width": 144, "height": 30, "text": "Linework", "size": 24, "fill": "#111111", "id": "obj_000001"}}
+{"schema_version": 1, "op_id": "op_000002", "timestamp": "2026-04-03T23:21:56Z", "op": "draw.text", "payload": {"x": 18, "y": 48, "width": 144, "height": 34, "text": "deterministic", "size": 18, "fill": "#0055AA", "align": "left", "valign": "top", "padding": 4, "id": "obj_000002"}}

@@ -98,7 +98,7 @@ The bundled font becomes part of the rendering contract for the MVP.
   - polygon
   - text
   - image placement
-- Text anchor and wrapping controls
+- Box-based text layout and wrapping controls
 - Object mutation by stable ID or unique live label
 - Object labels as metadata
 - Object visibility
@@ -533,7 +533,7 @@ Each input line must be a JSON object with `op` and `payload` fields:
 ```json
 {"op":"draw.rect","payload":{"x":80,"y":120,"width":300,"height":180,"fill":"#EEEEEE","label":"api-box"}}
 {"op":"draw.arrow","payload":{"x1":400,"y1":210,"x2":620,"y2":210,"stroke":"#333333","stroke_width":3,"arrowhead":"end","arrow_size":18}}
-{"op":"draw.text","payload":{"x":100,"y":160,"text":"API flow","size":28,"anchor":"center","max_width":220,"fill":"#000000"}}
+{"op":"draw.text","payload":{"x":80,"y":120,"width":300,"height":180,"text":"API flow","size":28,"fill":"#000000"}}
 ```
 
 Object IDs may be omitted from draw operations; `linework` will generate sequential IDs and include them in the results.
@@ -742,14 +742,14 @@ The convenience primitive commands must use these parameter names:
 - `linework draw circle --session PATH --x N --y N --radius N`
 - `linework draw polyline --session PATH --point X,Y --point X,Y ...`
 - `linework draw polygon --session PATH --point X,Y --point X,Y --point X,Y ...`
-- `linework draw text --session PATH --x N --y N --text STRING`
+- `linework draw text --session PATH --x N --y N --width N --height N --text STRING`
 - `linework draw image --session PATH --source PATH --x N --y N`
 
 Create commands may also accept:
 
 - `--label STRING`
 - `--visible true|false`
-- applicable style flags such as `--stroke`, `--fill`, `--stroke-width`, `--size`, `--arrowhead`, `--arrow-size`, `--anchor`, and `--max-width`
+- applicable style and layout flags such as `--stroke`, `--fill`, `--stroke-width`, `--size`, `--arrowhead`, `--arrow-size`, `--align`, `--valign`, and `--padding`
 
 Edit commands must use the same field names and additionally require:
 
@@ -973,10 +973,13 @@ Geometry and content fields:
 
 - `x`
 - `y`
+- `width`
+- `height`
 - `text`
 - `size`
-- `anchor`
-- `max_width` optional
+- `align`
+- `valign`
+- `padding` optional
 
 Style field:
 
@@ -984,8 +987,14 @@ Style field:
 
 Text behavior:
 
-- `anchor` controls horizontal alignment with values `left`, `center`, `right`
-- `max_width` enables basic word wrapping based on rendered font metrics
+- `x` and `y` locate the top-left corner of the text layout box
+- `width` and `height` define the text layout box
+- wrapping uses the padded inner box width
+- `align` controls horizontal alignment inside the box with values `left`, `center`, `right`
+- `valign` controls vertical alignment inside the box with values `top`, `middle`, `bottom`
+- `align` defaults to `center` and `valign` defaults to `middle`
+- `padding` shrinks the usable inner box before wrapping and placement
+- text may overflow visibly when the rendered block is larger than the box; there is no clipping or auto-shrink behavior
 - no rich text
 
 ### 11.8 Image
@@ -1051,7 +1060,7 @@ Each input line is a JSON object with `op` and `payload` fields:
 {"op":"draw.arrow","payload":{"x1":340.0,"y1":210.0,"x2":520.0,"y2":210.0,"stroke":"#333333","stroke_width":3.0,"arrowhead":"both","arrow_size":18.0}}
 {"op":"draw.circle","payload":{"x":560.0,"y":120.0,"radius":28.0,"fill":"#BFDBFE"}}
 {"op":"draw.polygon","payload":{"points":[[380.0,120.0],[520.0,60.0],[620.0,160.0]],"fill":"#FF6666","stroke":"#AA3333","label":"roof"}}
-{"op":"draw.text","payload":{"x":100.0,"y":160.0,"text":"API flow","size":28.0,"anchor":"center","max_width":240.0,"fill":"#000000"}}
+{"op":"draw.text","payload":{"x":80.0,"y":120.0,"width":300.0,"height":180.0,"text":"API flow","size":28.0,"fill":"#000000"}}
 {"op":"edit.rect","payload":{"id":"obj_000001","fill":"#CCCCCC"}}
 {"op":"delete","payload":{"label":"api-box"}}
 {"op":"undo","payload":{}}
@@ -1078,9 +1087,9 @@ SESSION=/path/to/session
 # 3. Draw a diagram via JSONL batch
 cat <<'EOF' | linework run --session "$SESSION" --json
 {"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","label":"server"}}
-{"op":"draw.text","payload":{"x":100,"y":90,"text":"Server","size":20}}
+{"op":"draw.text","payload":{"x":50,"y":50,"width":200,"height":100,"text":"Server","size":20}}
 {"op":"draw.rect","payload":{"x":350,"y":50,"width":200,"height":100,"fill":"#E8E8E8","label":"client"}}
-{"op":"draw.text","payload":{"x":400,"y":90,"text":"Client","size":20}}
+{"op":"draw.text","payload":{"x":350,"y":50,"width":200,"height":100,"text":"Client","size":20}}
 {"op":"draw.line","payload":{"x1":250,"y1":100,"x2":350,"y2":100,"stroke":"#333333","stroke_width":3}}
 EOF
 

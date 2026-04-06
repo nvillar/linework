@@ -26,9 +26,13 @@
       "visible": true,
       "x": 22.0,
       "y": 28.0,
+      "width": 70.0,
+      "height": 24.0,
       "text": "alpha",
       "size": 20.0,
-      "anchor": "left",
+      "align": "center",
+      "valign": "middle",
+      "padding": 0.0,
       "fill": "#222222"
     }
   ]

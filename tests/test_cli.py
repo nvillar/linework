@@ -135,7 +135,9 @@ def test_schema_command_outputs_compact_overview() -> None:
     assert "Shared defaults:" in result.stdout
     assert "Capability discovery:" in result.stdout
     assert "visible=true, stroke=#000000, stroke_width=2.0" in result.stdout
-    assert "text: size=16.0, fill=#000000, anchor=left" in result.stdout
+    assert (
+        "text: size=16.0, fill=#000000, align=center, valign=middle, padding=0.0" in result.stdout
+    )
     assert "linework schema draw.arrow" in result.stdout
     assert "linework schema --json" in result.stdout
     assert "full manifest" in result.stdout
@@ -168,10 +170,16 @@ def test_schema_command_outputs_machine_readable_manifest() -> None:
     }
     assert payload["ops"]["draw.arrow"]["optional"]["arrow_size"]["type"] == "positive-number|null"
     assert payload["ops"]["draw.circle"]["required"]["radius"]["type"] == "positive-number"
-    assert payload["ops"]["draw.text"]["optional"]["anchor"]["enum"] == [
+    assert payload["ops"]["draw.text"]["required"]["width"]["type"] == "positive-number"
+    assert payload["ops"]["draw.text"]["optional"]["align"]["enum"] == [
         "left",
         "center",
         "right",
+    ]
+    assert payload["ops"]["draw.text"]["optional"]["valign"]["enum"] == [
+        "top",
+        "middle",
+        "bottom",
     ]
     assert result.stderr == ""
 

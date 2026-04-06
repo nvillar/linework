@@ -12,10 +12,14 @@
       "type": "text",
       "visible": true,
       "x": 18.0,
-      "y": 18.0,
+      "y": 12.0,
+      "width": 144.0,
+      "height": 30.0,
       "text": "Linework",
       "size": 24.0,
-      "anchor": "left",
+      "align": "center",
+      "valign": "middle",
+      "padding": 0.0,
       "fill": "#111111"
     },
     {
@@ -23,10 +27,14 @@
       "type": "text",
       "visible": true,
       "x": 18.0,
-      "y": 52.0,
+      "y": 48.0,
+      "width": 144.0,
+      "height": 34.0,
       "text": "deterministic",
       "size": 18.0,
-      "anchor": "left",
+      "align": "left",
+      "valign": "top",
+      "padding": 4.0,
       "fill": "#0055AA"
     }
   ]

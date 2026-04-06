@@ -10,9 +10,12 @@ from PIL import Image
 from linework.constants import (
     ARROWHEAD_MODES,
     DEFAULT_ARROWHEAD,
-    DEFAULT_TEXT_ANCHOR,
+    DEFAULT_TEXT_ALIGN,
+    DEFAULT_TEXT_PADDING,
+    DEFAULT_TEXT_VALIGN,
     HEX_COLOR,
-    TEXT_ANCHORS,
+    TEXT_ALIGNS,
+    TEXT_VALIGNS,
 )
 from linework.core.errors import CommandValidationError
 
@@ -87,21 +90,27 @@ def apply_edit(
             current["x"] = require_number(payload.get("x"), field="x")
         if "y" in payload:
             current["y"] = require_number(payload.get("y"), field="y")
-        if "anchor" in payload:
-            current["anchor"] = require_choice(
-                payload.get("anchor"),
-                field="anchor",
-                choices=TEXT_ANCHORS,
+        if "width" in payload:
+            current["width"] = require_positive_number(payload.get("width"), field="width")
+        if "height" in payload:
+            current["height"] = require_positive_number(payload.get("height"), field="height")
+        if "align" in payload:
+            current["align"] = require_choice(
+                payload.get("align"),
+                field="align",
+                choices=TEXT_ALIGNS,
             )
-        if "max_width" in payload:
-            max_width = require_optional_positive_number(
-                payload.get("max_width"),
-                field="max_width",
+        if "valign" in payload:
+            current["valign"] = require_choice(
+                payload.get("valign"),
+                field="valign",
+                choices=TEXT_VALIGNS,
             )
-            if max_width is None:
-                current.pop("max_width", None)
-            else:
-                current["max_width"] = max_width
+        if "padding" in payload:
+            current["padding"] = require_non_negative_number(
+                payload.get("padding"),
+                field="padding",
+            )
 
     if object_type in {"line", "arrow"}:
         for field in ("x1", "y1", "x2", "y2"):
@@ -178,6 +187,14 @@ def require_positive_number(value: object, *, field: str) -> float:
     number = require_number(value, field=field)
     if number <= 0:
         raise CommandValidationError(f"{field} must be positive")
+    return number
+
+
+def require_non_negative_number(value: object, *, field: str) -> float:
+    """Normalize a numeric field to float and reject negative values."""
+    number = require_number(value, field=field)
+    if number < 0:
+        raise CommandValidationError(f"{field} must be non-negative")
     return number
 
 
@@ -408,21 +425,29 @@ def _build_text(*, payload: Mapping[str, object], object_id: str) -> ObjectDict:
         {
             "x": require_number(payload.get("x"), field="x"),
             "y": require_number(payload.get("y"), field="y"),
+            "width": require_positive_number(payload.get("width"), field="width"),
+            "height": require_positive_number(payload.get("height"), field="height"),
             "text": require_string(payload.get("text"), field="text"),
             "size": require_positive_number(payload.get("size", 16.0), field="size"),
-            "anchor": require_choice(
-                payload.get("anchor", DEFAULT_TEXT_ANCHOR),
-                field="anchor",
-                choices=TEXT_ANCHORS,
+            "align": require_choice(
+                payload.get("align", DEFAULT_TEXT_ALIGN),
+                field="align",
+                choices=TEXT_ALIGNS,
+            ),
+            "valign": require_choice(
+                payload.get("valign", DEFAULT_TEXT_VALIGN),
+                field="valign",
+                choices=TEXT_VALIGNS,
+            ),
+            "padding": require_non_negative_number(
+                payload.get("padding", DEFAULT_TEXT_PADDING),
+                field="padding",
             ),
         }
     )
     fill = normalize_optional_color(payload.get("fill"), field="fill")
     if fill is not None:
         object_data["fill"] = fill
-    max_width = require_optional_positive_number(payload.get("max_width"), field="max_width")
-    if max_width is not None:
-        object_data["max_width"] = max_width
     return object_data
 
 

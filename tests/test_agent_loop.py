@@ -67,7 +67,14 @@ class TestApplyBatch:
                 },
                 {
                     "op": "draw.text",
-                    "payload": {"x": 20, "y": 60, "text": "hello", "size": 16},
+                    "payload": {
+                        "x": 20,
+                        "y": 60,
+                        "width": 80,
+                        "height": 30,
+                        "text": "hello",
+                        "size": 16,
+                    },
                 },
             ],
         )
@@ -209,7 +216,14 @@ class TestApplyBatch:
                 },
                 {
                     "op": "draw.text",
-                    "payload": {"x": 20, "y": 60, "text": "hello", "size": 16},
+                    "payload": {
+                        "x": 20,
+                        "y": 60,
+                        "width": 80,
+                        "height": 30,
+                        "text": "hello",
+                        "size": 16,
+                    },
                 },
                 {"op": "undo", "payload": {}},
             ],
@@ -313,7 +327,7 @@ class TestRunCLI:
         )
         jsonl = (
             '{"op":"draw.rect","payload":{"x":10,"y":10,"width":50,"height":30}}\n'
-            '{"op":"draw.text","payload":{"x":20,"y":60,"text":"hi","size":14}}\n'
+            '{"op":"draw.text","payload":{"x":20,"y":60,"width":80,"height":30,"text":"hi","size":14}}\n'
         )
         result = run_cli(
             "run",

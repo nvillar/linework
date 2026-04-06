@@ -9,7 +9,12 @@ from typing import cast
 
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
-from linework.constants import DEFAULT_ARROWHEAD, DEFAULT_TEXT_ANCHOR
+from linework.constants import (
+    DEFAULT_ARROWHEAD,
+    DEFAULT_TEXT_ALIGN,
+    DEFAULT_TEXT_PADDING,
+    DEFAULT_TEXT_VALIGN,
+)
 from linework.core.objects import resolve_asset_path
 from linework.storage.models import Canvas, SceneSnapshot
 
@@ -266,40 +271,36 @@ def arrowhead_polygon(
 
 
 def render_text_object(*, draw: ImageDraw.ImageDraw, object_data: dict[str, object]) -> None:
-    """Render a text object with optional alignment and wrapping."""
+    """Render a text object inside its layout box."""
     font = load_default_text_font(number_or_default(object_data, "size", 16.0))
     spacing = default_line_spacing(font)
-    anchor = string_or_default(object_data, "anchor", DEFAULT_TEXT_ANCHOR)
+    align = string_or_default(object_data, "align", DEFAULT_TEXT_ALIGN)
+    valign = string_or_default(object_data, "valign", DEFAULT_TEXT_VALIGN)
+    padding = number_or_default(object_data, "padding", DEFAULT_TEXT_PADDING)
     text = string_value(object_data, "text")
-    max_width = number_or_none(object_data, "max_width")
-    rendered_text = wrap_text_to_width(text, font=font, max_width=max_width)
-    position = aligned_text_position(
+    inner_box = text_inner_box(object_data, padding=padding)
+    rendered_text = wrap_text_to_width(text, font=font, max_width=inner_box[2])
+    text_bbox = measure_text_block_bbox(
         draw=draw,
         text=rendered_text,
-        x=number_value(object_data, "x"),
-        y=number_value(object_data, "y"),
         font=font,
-        anchor=anchor,
+        align=align,
         spacing=spacing,
     )
+    position = text_box_origin(
+        text_bbox=text_bbox,
+        inner_box=inner_box,
+        align=align,
+        valign=valign,
+    )
     fill = get_color(object_data.get("fill"), default="#000000")
-
-    if "\n" in rendered_text:
-        draw.multiline_text(
-            position,
-            rendered_text,
-            font=font,
-            fill=fill,
-            align=anchor,
-            spacing=spacing,
-        )
-        return
-
-    draw.text(
+    draw.multiline_text(
         position,
         rendered_text,
         font=font,
         fill=fill,
+        align=align,
+        spacing=spacing,
     )
 
 
@@ -379,28 +380,62 @@ def split_long_word(word: str, *, font: ImageFont.FreeTypeFont, max_width: float
     return chunks
 
 
-def aligned_text_position(
+def text_inner_box(
+    object_data: dict[str, object],
+    *,
+    padding: float,
+) -> tuple[float, float, float, float]:
+    """Return the padded text box as left, top, width, height."""
+    x = number_value(object_data, "x") + padding
+    y = number_value(object_data, "y") + padding
+    width = max(1.0, number_value(object_data, "width") - padding * 2.0)
+    height = max(1.0, number_value(object_data, "height") - padding * 2.0)
+    return (x, y, width, height)
+
+
+def measure_text_block_bbox(
     *,
     draw: ImageDraw.ImageDraw,
     text: str,
-    x: float,
-    y: float,
     font: ImageFont.FreeTypeFont,
-    anchor: str,
+    align: str,
     spacing: int,
-) -> tuple[float, float]:
-    """Shift a text origin so x behaves as a left/center/right anchor."""
-    if "\n" in text:
-        bbox = draw.multiline_textbbox((0, 0), text, font=font, align=anchor, spacing=spacing)
-    else:
-        bbox = draw.textbbox((0, 0), text, font=font)
-    width = bbox[2] - bbox[0]
+) -> tuple[float, float, float, float]:
+    """Measure the rendered text block."""
+    return draw.multiline_textbbox((0, 0), text, font=font, align=align, spacing=spacing)
 
-    if anchor == "center":
-        return (x - width / 2.0, y)
-    if anchor == "right":
-        return (x - width, y)
-    return (x, y)
+
+def text_box_origin(
+    *,
+    text_bbox: tuple[float, float, float, float],
+    inner_box: tuple[float, float, float, float],
+    align: str,
+    valign: str,
+) -> tuple[float, float]:
+    """Place a measured text block inside the padded layout box.
+
+    If the rendered text block is larger than the padded box, preserve the
+    requested alignment and allow visible overflow rather than clamping.
+    """
+    inner_x, inner_y, inner_width, inner_height = inner_box
+    block_width = text_bbox[2] - text_bbox[0]
+    block_height = text_bbox[3] - text_bbox[1]
+
+    if align == "left":
+        block_x = inner_x
+    elif align == "right":
+        block_x = inner_x + inner_width - block_width
+    else:
+        block_x = inner_x + (inner_width - block_width) / 2.0
+
+    if valign == "top":
+        block_y = inner_y
+    elif valign == "bottom":
+        block_y = inner_y + inner_height - block_height
+    else:
+        block_y = inner_y + (inner_height - block_height) / 2.0
+
+    return (block_x - text_bbox[0], block_y - text_bbox[1])
 
 
 def text_length(text: str, *, font: ImageFont.FreeTypeFont) -> float:

@@ -115,7 +115,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - `draw.circle` / `edit.circle` convenience aliases stored as ellipses
 - `linework run --out` one-shot temporary-session export flow
 - `arrow` primitive with configurable `arrowhead` and optional `arrow_size`
-- text `anchor` and `max_width` support
+- initial text alignment and wrapping support (later redesigned in Milestone 12)
 - new agent UX regression fixture plus expanded CLI/render coverage
 
 #### Milestone 11: Alpha compositing and transparency correctness (complete)
@@ -125,9 +125,18 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - targeted scene-engine coverage for transparency overlap behavior
 - spec and roadmap updates clarifying the delivered alpha-rendering contract
 
+#### Milestone 12: Box-based text layout (complete)
+
+- redesigned `draw.text` / `edit.text` around explicit text boxes (`x`, `y`, `width`, `height`)
+- replaced point anchoring with box-internal `align`, `valign`, and optional `padding`
+- centered boxed text by default for diagram/image labeling
+- wrapping now derives from the padded inner box width
+- expanded CLI/render/regression coverage for boxed placement and multiline layout
+- refreshed bootstrap, schema/help output, SPEC, and roadmap text to teach the new model
+
 ### Current implementation status
 
-Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11.
+Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12.
 
 Current user-facing command surface:
 
@@ -155,7 +164,7 @@ Internal engine capabilities:
 - scene replay from command history
 - PNG rendering for all supported primitives with per-object alpha compositing for renderer-drawn objects
 - arrow rendering with configurable arrowhead placement and size
-- text anchor and width-based wrapping support
+- boxed text layout with default centered placement, optional box-internal alignment, padding, and width-based wrapping
 - label-based selection for edit/delete with disambiguation on collisions
 - bundled Noto Sans default font for deterministic text rendering
 - session-local asset import/copy for image convenience commands
@@ -176,7 +185,7 @@ Implementation notes:
 - `linework new` output always includes a `watch_command` hint; `--file` / `--stdin` seed the session from an initial batch
 - `linework run --out` can export either an existing session or a temporary throwaway batch result, and `--width`, `--height`, and `--background` customize the temporary canvas when `--session` is omitted
 - `draw.arrow` / `edit.arrow` support `arrowhead` (`end`, `start`, `both`, `none`) and optional pixel-sized `arrow_size`
-- text objects now support horizontal `anchor` plus width-based wrapping via `max_width`
+- text objects now use explicit layout boxes with `align`, `valign`, and optional `padding`; wrapping uses the padded inner box width
 - renderer-drawn objects now render through per-object RGBA layers and are alpha-composited in creation order; image objects continue to use explicit `alpha_composite`
 - `linework edit` can select by label when `--id` is omitted; use `--id` when relabeling
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches

@@ -104,7 +104,7 @@ JSONL reference (pipe to linework run --session PATH --json):
   {{"op":"draw.circle","payload":{{"x":430,"y":50,"radius":35,"fill":"#FDE68A"}}}}
   {{"op":"draw.polyline","payload":{{"points":[[20,180],[80,150],[140,210]],"stroke":"#333333"}}}}
   {{"op":"draw.polygon","payload":{{"points":[[220,180],[300,120],[360,210]],"fill":"#FF6666"}}}}
-  {{"op":"draw.text","payload":{{"x":80,"y":90,"text":"Hello","anchor":"center","max_width":160}}}}
+  {{"op":"draw.text","payload":{{"x":50,"y":50,"width":200,"height":100,"text":"Hello","size":24}}}}
   {{"op":"draw.image","payload":{{"x":420,"y":40,"asset_path":"assets/reference.png"}}}}
   {{"op":"edit.rect","payload":{{"id":"obj_000001","fill":"#CCCCCC"}}}}
   {{"op":"delete","payload":{{"label":"box"}}}}

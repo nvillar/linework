@@ -39,13 +39,16 @@
       "type": "text",
       "visible": true,
       "label": "caption",
-      "x": 128.0,
-      "y": 88.0,
+      "x": 104.0,
+      "y": 74.0,
+      "width": 88.0,
+      "height": 60.0,
       "text": "Wrapped text for agents",
       "size": 18.0,
-      "anchor": "center",
-      "fill": "#111111",
-      "max_width": 92.0
+      "align": "center",
+      "valign": "middle",
+      "padding": 0.0,
+      "fill": "#111111"
     }
   ]
 }
