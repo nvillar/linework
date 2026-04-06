@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,9 @@ from linework.storage.session import read_session_metadata
 
 DEFAULT_INTERVAL_MS = 250
 RenderSignature = tuple[int, int]
+
+_VISIBILITY_CHECK_INTERVAL_MS = 50
+_VISIBILITY_CHECK_MAX_WAIT_MS = 2000
 
 
 class WatchError(RuntimeError):
@@ -192,10 +196,41 @@ class SessionWatcherApp:
         image_label.pack(fill=self._toolkit.tk.BOTH, expand=True)
         return image_label
 
-    def run(self) -> None:
-        """Run the watcher until the window closes."""
+    def run(self, *, on_visible: Callable[[], None] | None = None) -> None:
+        """Run the watcher until the window closes.
+
+        If *on_visible* is provided it is called from the event loop once
+        the window is confirmed visible on screen.  If the window does not
+        become visible within :data:`_VISIBILITY_CHECK_MAX_WAIT_MS`, the
+        watcher window is closed.
+        """
+        if on_visible is not None:
+            self._root.after(0, lambda: self._check_visibility(on_visible, elapsed_ms=0))
         self._root.after(0, self._poll)
         self._root.mainloop()
+
+    def _check_visibility(
+        self,
+        callback: Callable[[], None],
+        *,
+        elapsed_ms: int,
+    ) -> None:
+        """Confirm the window is visible or close it after a timeout."""
+        if not bool(self._root.winfo_exists()):
+            return
+        if bool(self._root.winfo_viewable()):
+            callback()
+            return
+        if elapsed_ms >= _VISIBILITY_CHECK_MAX_WAIT_MS:
+            self._root.destroy()
+            return
+        self._root.after(
+            _VISIBILITY_CHECK_INTERVAL_MS,
+            lambda: self._check_visibility(
+                callback,
+                elapsed_ms=elapsed_ms + _VISIBILITY_CHECK_INTERVAL_MS,
+            ),
+        )
 
     def _poll(self) -> None:
         """Poll for render changes and update the display."""
@@ -276,6 +311,8 @@ __all__ = [
     "WatchError",
     "WatchTarget",
     "WatchUnavailableError",
+    "_VISIBILITY_CHECK_INTERVAL_MS",
+    "_VISIBILITY_CHECK_MAX_WAIT_MS",
     "compute_initial_window_size",
     "create_session_watcher",
     "load_render_image",

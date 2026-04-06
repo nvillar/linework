@@ -152,6 +152,10 @@ action.
 """
 
 _WATCHER_STARTUP_TIMEOUT_S = 5.0
+_WINDOWS_DETACHED_WATCHER_MESSAGE = (
+    "cannot open watcher window: this process does not have access to the "
+    "interactive desktop (detached or noninteractive context)"
+)
 
 
 class _WatchedProcess(Protocol):
@@ -1782,10 +1786,14 @@ def cmd_watch(args: argparse.Namespace) -> int:
         pid = _launch_detached_watcher(args.session, interval_ms=args.interval_ms)
     except (OSError, SessionError) as exc:
         return _error(str(exc), use_json=False)
-    except WatchUnavailableError:
+    except WatchUnavailableError as exc:
         print(
-            "Watcher unavailable in this environment. "
-            "Ask the user to run this command from a terminal:",
+            f"Watcher unavailable in this environment: {exc}",
+            file=sys.stderr,
+        )
+        print(
+            "The watcher requires a graphical desktop session. "
+            "Ask the user to run this command in their terminal:",
             file=sys.stderr,
         )
         print(
@@ -1811,8 +1819,32 @@ def _cmd_watch_impl(args: argparse.Namespace) -> int:
             error_kind="unavailable" if isinstance(exc, WatchUnavailableError) else None,
         )
         return _error(str(exc), use_json=False)
-    _write_watcher_startup_status(args.startup_status, status="ready")
-    watcher.run()
+
+    if args.startup_status:
+        visibility_confirmed = False
+
+        def _on_visible() -> None:
+            nonlocal visibility_confirmed
+            visibility_confirmed = True
+            _write_watcher_startup_status(args.startup_status, status="ready")
+
+        watcher.run(on_visible=_on_visible)
+
+        if not visibility_confirmed:
+            reason = (
+                "watcher window was created but never became visible; "
+                "the environment may lack GUI display access"
+            )
+            _write_watcher_startup_status(
+                args.startup_status,
+                status="error",
+                error=reason,
+                error_kind="unavailable",
+            )
+            return _error(reason, use_json=False)
+    else:
+        watcher.run()
+
     return 0
 
 
@@ -1899,7 +1931,7 @@ def _watch_impl_command() -> list[str]:
     if sys.platform == "win32":
         return [_windows_gui_python_executable(), "-m", "linework", "_watch-impl"]
 
-    argv0 = sys.argv[0] if sys.argv else ""
+    argv0 = sys.argv[0] if sys.argv else ""  # type: ignore[unreachable]
     if argv0.endswith("__main__.py") or not argv0:
         return [sys.executable, "-m", "linework", "_watch-impl"]
 
@@ -1926,8 +1958,85 @@ def _escape_powershell_string(value: str) -> str:
     return value.replace("'", "''")
 
 
-def _ensure_windows_interactive_desktop() -> None:
-    """Fail clearly when watcher launch has no access to an interactive desktop."""
+def _windows_user_object_name(handle: int, *, object_type: str) -> str:
+    """Read the Win32 object name for a window-station or desktop handle."""
+    import ctypes
+
+    UOI_NAME = 2
+
+    win_dll = getattr(ctypes, "WinDLL")
+    user32 = win_dll("user32", use_last_error=True)
+    get_user_object_information = user32.GetUserObjectInformationW
+    get_user_object_information.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+        ctypes.POINTER(ctypes.c_uint32),
+    ]
+    get_user_object_information.restype = ctypes.c_bool
+
+    needed = ctypes.c_uint32()
+    get_user_object_information(handle, UOI_NAME, None, 0, ctypes.byref(needed))
+    if needed.value == 0:
+        raise WatchUnavailableError(f"unable to inspect Windows {object_type} name")
+
+    wchar_size = ctypes.sizeof(ctypes.c_wchar)
+    char_count = max(1, (needed.value + wchar_size - 1) // wchar_size)
+    buffer = ctypes.create_unicode_buffer(char_count)
+    if not get_user_object_information(
+        handle,
+        UOI_NAME,
+        buffer,
+        ctypes.sizeof(buffer),
+        ctypes.byref(needed),
+    ):
+        raise WatchUnavailableError(f"unable to inspect Windows {object_type} name")
+
+    name = buffer.value
+    if not name:
+        raise WatchUnavailableError(f"unable to inspect Windows {object_type} name")
+    return name
+
+
+def _current_windows_window_station_name() -> str:
+    """Return the current process window-station name."""
+    import ctypes
+
+    win_dll = getattr(ctypes, "WinDLL")
+    user32 = win_dll("user32", use_last_error=True)
+    get_process_window_station = user32.GetProcessWindowStation
+    get_process_window_station.argtypes = []
+    get_process_window_station.restype = ctypes.c_void_p
+
+    handle = get_process_window_station()
+    if not handle:
+        raise WatchUnavailableError("unable to inspect current Windows window station")
+    return _windows_user_object_name(handle, object_type="window station")
+
+
+def _current_windows_thread_desktop_name() -> str:
+    """Return the current thread desktop name."""
+    import ctypes
+
+    win_dll = getattr(ctypes, "WinDLL")
+    user32 = win_dll("user32", use_last_error=True)
+    kernel32 = win_dll("kernel32", use_last_error=True)
+    get_thread_desktop = user32.GetThreadDesktop
+    get_thread_desktop.argtypes = [ctypes.c_uint32]
+    get_thread_desktop.restype = ctypes.c_void_p
+    get_current_thread_id = kernel32.GetCurrentThreadId
+    get_current_thread_id.argtypes = []
+    get_current_thread_id.restype = ctypes.c_uint32
+
+    handle = get_thread_desktop(get_current_thread_id())
+    if not handle:
+        raise WatchUnavailableError("unable to inspect current Windows desktop")
+    return _windows_user_object_name(handle, object_type="desktop")
+
+
+def _input_windows_desktop_name() -> str:
+    """Return the active input desktop name."""
     import ctypes
 
     DESKTOP_READOBJECTS = 0x0001
@@ -1945,7 +2054,21 @@ def _ensure_windows_interactive_desktop() -> None:
     if not desktop:
         raise WatchUnavailableError("watcher requires an interactive Windows desktop session")
 
-    close_desktop(desktop)
+    try:
+        return _windows_user_object_name(desktop, object_type="desktop")
+    finally:
+        close_desktop(desktop)
+
+
+def _ensure_windows_interactive_desktop() -> None:
+    """Fail clearly when watcher launch has no access to an interactive desktop."""
+    if _current_windows_window_station_name() != "WinSta0":
+        raise WatchUnavailableError(_WINDOWS_DETACHED_WATCHER_MESSAGE)
+
+    current_desktop = _current_windows_thread_desktop_name()
+    input_desktop = _input_windows_desktop_name()
+    if current_desktop != input_desktop:
+        raise WatchUnavailableError(_WINDOWS_DETACHED_WATCHER_MESSAGE)
 
 
 def _launch_detached_watcher_windows(cmd: Sequence[str]) -> _WatchedProcess:

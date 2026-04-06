@@ -448,17 +448,23 @@ def test_new_plaintext_includes_watch_command(
     assert captured.err == ""
 
 
-def test_watch_impl_writes_ready_status_before_running(
+def test_watch_impl_confirms_visibility_before_reporting_ready(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from collections.abc import Callable
+
     from linework import cli
 
     status_path = tmp_path / "startup.json"
     seen: dict[str, object] = {}
 
     class FakeWatcher:
-        def run(self) -> None:
+        def run(self, *, on_visible: Callable[[], None] | None = None) -> None:
             seen["ran"] = True
+            # Simulate the window becoming visible inside mainloop.
+            if on_visible is not None:
+                seen["on_visible_called"] = True
+                on_visible()
 
     def fake_create_session_watcher(session: str, *, interval_ms: int) -> FakeWatcher:
         seen["session"] = session
@@ -485,7 +491,46 @@ def test_watch_impl_writes_ready_status_before_running(
         "session": str(tmp_path / "session"),
         "interval_ms": 375,
         "ran": True,
+        "on_visible_called": True,
     }
+
+
+def test_watch_impl_reports_error_when_window_not_visible(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from collections.abc import Callable
+
+    from linework import cli
+
+    status_path = tmp_path / "startup.json"
+
+    class FakeWatcher:
+        def run(self, *, on_visible: Callable[[], None] | None = None) -> None:
+            # Simulate the window never becoming visible: don't call on_visible.
+            pass
+
+    def fake_create_session_watcher(session: str, *, interval_ms: int) -> FakeWatcher:
+        return FakeWatcher()
+
+    monkeypatch.setattr(cli, "create_session_watcher", fake_create_session_watcher)
+
+    exit_code = cli.main(
+        [
+            "_watch-impl",
+            "--session",
+            str(tmp_path / "session"),
+            "--startup-status",
+            str(status_path),
+        ]
+    )
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    status = json.loads(status_path.read_text(encoding="utf-8"))
+    assert status["status"] == "error"
+    assert status["error_kind"] == "unavailable"
+    assert "never became visible" in status["error"]
+    assert "never became visible" in captured.err
 
 
 def test_watch_impl_writes_error_status_when_startup_fails(
@@ -544,6 +589,39 @@ def test_watch_emits_hint_when_watcher_unavailable(
 
     assert exit_code == 1
     assert "Watcher unavailable" in captured.err
+    assert "tkinter is unavailable in the active Python environment" in captured.err
+    assert f"linework watch --session {session_path}" in captured.err
+    assert captured.out == ""
+
+
+def test_watch_reports_detached_windows_launch_reason(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from linework import cli
+
+    session_path = tmp_path / "watch-session"
+    create_session(
+        session=str(session_path),
+        name=None,
+        width=800,
+        height=800,
+        background="#FFFFFF",
+    )
+
+    def fake_launch(session: str, *, interval_ms: int) -> int:
+        raise WatchUnavailableError(
+            "cannot open watcher window: this process does not have access to the "
+            "interactive desktop (detached or noninteractive context)"
+        )
+
+    monkeypatch.setattr(cli, "_launch_detached_watcher", fake_launch)
+
+    exit_code = cli.main(["watch", "--session", str(session_path)])
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert "Watcher unavailable" in captured.err
+    assert "does not have access to the interactive desktop" in captured.err
     assert f"linework watch --session {session_path}" in captured.err
     assert captured.out == ""
 
@@ -797,6 +875,48 @@ def test_launch_detached_watcher_windows_requires_interactive_desktop(
 
     with pytest.raises(WatchError, match="interactive Windows desktop session"):
         cli._launch_detached_watcher_windows(["pythonw.exe", "-m", "linework", "_watch-impl"])
+
+
+def test_windows_interactive_desktop_requires_winsta0(monkeypatch: pytest.MonkeyPatch) -> None:
+    from linework import cli
+
+    monkeypatch.setattr(cli, "_current_windows_window_station_name", lambda: "Service-0x0-3e7$")
+    monkeypatch.setattr(cli, "_current_windows_thread_desktop_name", lambda: "Default")
+    monkeypatch.setattr(cli, "_input_windows_desktop_name", lambda: "Default")
+
+    with pytest.raises(
+        WatchUnavailableError,
+        match="does not have access to the interactive desktop",
+    ):
+        cli._ensure_windows_interactive_desktop()
+
+
+def test_windows_interactive_desktop_requires_active_input_desktop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from linework import cli
+
+    monkeypatch.setattr(cli, "_current_windows_window_station_name", lambda: "WinSta0")
+    monkeypatch.setattr(cli, "_current_windows_thread_desktop_name", lambda: "Detached")
+    monkeypatch.setattr(cli, "_input_windows_desktop_name", lambda: "Default")
+
+    with pytest.raises(
+        WatchUnavailableError,
+        match="does not have access to the interactive desktop",
+    ):
+        cli._ensure_windows_interactive_desktop()
+
+
+def test_windows_interactive_desktop_passes_on_winsta0_with_matching_desktop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from linework import cli
+
+    monkeypatch.setattr(cli, "_current_windows_window_station_name", lambda: "WinSta0")
+    monkeypatch.setattr(cli, "_current_windows_thread_desktop_name", lambda: "Default")
+    monkeypatch.setattr(cli, "_input_windows_desktop_name", lambda: "Default")
+
+    cli._ensure_windows_interactive_desktop()  # should not raise
 
 
 def test_launch_detached_watcher_uses_windows_launcher(

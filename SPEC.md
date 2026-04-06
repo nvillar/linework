@@ -665,6 +665,8 @@ Behavior:
 - uses the short session ID in the window title
 - scales the image to fit the window
 - chooses an initial window size that targets 1:1 canvas display when possible and otherwise caps to screen size
+- on Windows, fails non-zero with a clear error and rerun hint when launched from a detached or noninteractive process that cannot display the watcher window
+- confirms the window is visible on screen before reporting success; closes and reports failure if the window is not visible within the startup timeout
 
 The watcher must not mutate session state.
 

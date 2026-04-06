@@ -122,3 +122,92 @@ def test_load_render_image_retries_when_render_changes_mid_read(
 def test_load_render_image_retries_when_render_is_missing(tmp_path: Path) -> None:
     with pytest.raises(RetryableWatchError, match="unable to read render"):
         load_render_image(tmp_path / "missing.png", previous_signature=None)
+
+
+# ---------------------------------------------------------------------------
+# Visibility confirmation tests
+# ---------------------------------------------------------------------------
+
+
+def test_check_visibility_calls_callback_when_viewable() -> None:
+    """on_visible callback is invoked when the window is viewable."""
+    from linework.watch import SessionWatcherApp
+
+    called = False
+
+    class FakeRoot:
+        """Minimal stub for tkinter.Tk used only by _check_visibility."""
+
+        def winfo_exists(self) -> bool:
+            return True
+
+        def winfo_viewable(self) -> bool:
+            return True
+
+        def after(self, ms: int, func: object) -> None:
+            pass
+
+    watcher = object.__new__(SessionWatcherApp)
+    watcher._root = FakeRoot()
+
+    def on_visible() -> None:
+        nonlocal called
+        called = True
+
+    watcher._check_visibility(on_visible, elapsed_ms=0)
+    assert called
+
+
+def test_check_visibility_destroys_window_on_timeout() -> None:
+    """The window is destroyed when visibility is never achieved."""
+    from linework.watch import _VISIBILITY_CHECK_MAX_WAIT_MS, SessionWatcherApp
+
+    destroyed = False
+
+    class FakeRoot:
+        def winfo_exists(self) -> bool:
+            return True
+
+        def winfo_viewable(self) -> bool:
+            return False
+
+        def after(self, ms: int, func: object) -> None:
+            pass
+
+        def destroy(self) -> None:
+            nonlocal destroyed
+            destroyed = True
+
+    watcher = object.__new__(SessionWatcherApp)
+    watcher._root = FakeRoot()
+
+    watcher._check_visibility(lambda: None, elapsed_ms=_VISIBILITY_CHECK_MAX_WAIT_MS)
+    assert destroyed
+
+
+def test_check_visibility_retries_when_not_yet_viewable() -> None:
+    """A retry is scheduled when the window exists but is not yet viewable."""
+    from linework.watch import _VISIBILITY_CHECK_INTERVAL_MS, SessionWatcherApp
+
+    scheduled: list[tuple[int, object]] = []
+
+    class FakeRoot:
+        def winfo_exists(self) -> bool:
+            return True
+
+        def winfo_viewable(self) -> bool:
+            return False
+
+        def after(self, ms: int, func: object) -> None:
+            scheduled.append((ms, func))
+
+        def destroy(self) -> None:
+            pass
+
+    watcher = object.__new__(SessionWatcherApp)
+    watcher._root = FakeRoot()
+
+    watcher._check_visibility(lambda: None, elapsed_ms=0)
+
+    assert len(scheduled) == 1
+    assert scheduled[0][0] == _VISIBILITY_CHECK_INTERVAL_MS

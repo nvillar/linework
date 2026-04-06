@@ -34,7 +34,7 @@ def _update_command(version: str) -> str:
     source = f"git+{_REPO_URL}@v{version}"
     if sys.platform == "win32":
         return f"uv tool install --no-cache --reinstall-package linework --link-mode copy {source}"
-    return f"uv tool install --no-cache --reinstall-package linework {source}"
+    return f"uv tool install --no-cache --reinstall-package linework {source}"  # type: ignore[unreachable]
 
 
 def check_for_update(current_version: str) -> str | None:

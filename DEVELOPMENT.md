@@ -180,6 +180,8 @@ Implementation notes:
 - renderer-drawn objects now render through per-object RGBA layers and are alpha-composited in creation order; image objects continue to use explicit `alpha_composite`
 - `linework edit` can select by label when `--id` is omitted; use `--id` when relabeling
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
+- `linework watch` now preserves unavailable-environment reasons and, on Windows, rejects detached/noninteractive GUI contexts before reporting success
+- watcher startup handshake confirms the window is visible on screen (via `winfo_viewable`) before signalling "ready" to the parent; if the window never becomes visible, the child reports failure and the parent relays a clear error
 - version is derived from git tags via `hatch-vcs`; there is no hardcoded version string (see copilot-instructions §6)
 - `linework --version` checks the remote repo for newer tags via `git ls-remote` (5s timeout, best-effort); shows a platform-aware `uv tool install --no-cache --reinstall-package linework git+...@vX.Y.Z` command if an update is available
 - Windows: `_is_pid_alive` uses Win32 `OpenProcess` API instead of `os.kill(pid, 0)` (which sends `CTRL_C_EVENT` on Windows)
