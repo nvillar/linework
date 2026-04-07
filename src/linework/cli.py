@@ -89,8 +89,9 @@ Examples:
 After creation, reuse the printed session path for future draw/edit/export
 commands instead of creating a new session for each change.
 
-JSON output includes watch_command, inspect_command, and export_command fields.
-Plaintext output prints matching next-step hints.
+JSON output includes watch_command, watch_recommendation, inspect_command, and
+export_command fields. Plaintext output strongly suggests opening a watch and
+prints matching next-step hints.
 """
 
 _SCHEMA_EPILOG = f"""\
@@ -1199,6 +1200,7 @@ def _new_output_payload(
     """Serialize new-session output with optional initial-batch metadata."""
     payload = created.to_dict()
     payload["watch_command"] = f"linework watch --session {created.session_path}"
+    payload["watch_recommendation"] = "Open a watch for the user now so they can follow along live."
     payload["inspect_command"] = f"linework inspect --session {created.session_path}"
     payload["export_command"] = f"linework export --session {created.session_path} --output out.png"
     payload["reuse_session_hint"] = (
@@ -1238,11 +1240,12 @@ def _emit_new_session_result(
         if batch_result.failed:
             print(f"Failed: {batch_result.failed['op']}: {batch_result.failed['error']}")
         print(f"Objects: {batch_result.scene_object_count}")
+    print("Recommended next step: open a watch for the user now so they can follow along live.")
+    print(f"  linework watch --session {created.session_path}")
     print("Reuse this session path for iterative changes:")
     print(f"  linework draw rect --session {created.session_path} --x 50 --y 50 ... --json")
     print(f"  linework inspect --session {created.session_path} --json")
     print(f"  linework export --session {created.session_path} --output out.png")
-    print(f"Watch: linework watch --session {created.session_path}")
     if cleanup_hint is not None:
         print(f"Note: {cleanup_hint}")
     return 1 if batch_result is not None and batch_result.failed is not None else 0

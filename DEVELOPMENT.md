@@ -201,7 +201,7 @@ Implementation notes:
 - no-arg `linework`, `linework --help`, and `linework schema` now give consistent discovery advice: quick overview first, one-operation detail as needed, and `linework schema --json` as the full reference
 - `draw.circle` / `edit.circle` accept `x`, `y`, and `radius`, but the stored scene object type remains `ellipse`
 - workflow guidance now consistently recommends creating one persistent session with `linework new`, reusing that same `--session PATH` for all draw/edit/delete/inspect/export work, and using `linework watch` for live display
-- `linework new` output always includes exact next-step hints for reusing the created session (`watch_command`, `inspect_command`, `export_command`); `--file` / `--stdin` seed the session from an initial batch; a cleanup hint appears when ≥10 sessions exist
+- `linework new` output always includes exact next-step hints for reusing the created session (`watch_command`, `watch_recommendation`, `inspect_command`, `export_command`); it strongly recommends opening a watch for the user after creation; `--file` / `--stdin` seed the session from an initial batch; a cleanup hint appears when ≥10 sessions exist
 - `draw.arrow` / `edit.arrow` support `arrowhead` (`end`, `start`, `both`, `none`) and optional pixel-sized `arrow_size`
 - text objects now use explicit layout boxes with `align`, `valign`, and optional `padding`; wrapping uses the padded inner box width
 - renderer-drawn objects now render through per-object RGBA layers and are alpha-composited in creation order; image objects continue to use explicit `alpha_composite`

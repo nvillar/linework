@@ -101,6 +101,7 @@ def test_new_help_advertises_watch_command() -> None:
 
     assert result.returncode == 0
     assert "watch_command" in result.stdout
+    assert "watch_recommendation" in result.stdout
     assert "inspect_command" in result.stdout
     assert "reuse the printed session path" in result.stdout
     assert "--json" in result.stdout
@@ -460,6 +461,10 @@ def test_new_json_includes_watch_command(
     payload = json.loads(captured.out)
     assert payload["session_path"] == str(session_path)
     assert payload["watch_command"] == f"linework watch --session {session_path}"
+    assert (
+        payload["watch_recommendation"]
+        == "Open a watch for the user now so they can follow along live."
+    )
     assert payload["inspect_command"] == f"linework inspect --session {session_path}"
     assert payload["export_command"] == f"linework export --session {session_path} --output out.png"
     assert "run_command" not in payload
@@ -477,7 +482,10 @@ def test_new_plaintext_includes_watch_command(
     captured = capsys.readouterr()
 
     assert exit_code == 0
-    assert f"Watch: linework watch --session {session_path}" in captured.out
+    assert (
+        "Recommended next step: open a watch for the user now so they can follow along live."
+    ) in captured.out
+    assert f"  linework watch --session {session_path}" in captured.out
     assert "Reuse this session path for iterative changes:" in captured.out
     assert captured.err == ""
 
