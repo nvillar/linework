@@ -125,6 +125,72 @@ def test_load_render_image_retries_when_render_is_missing(tmp_path: Path) -> Non
 
 
 # ---------------------------------------------------------------------------
+# _ensure_tcl_library tests
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_tcl_library_sets_env_when_init_tcl_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TCL_LIBRARY is set when init.tcl exists next to the real Python binary."""
+    import os
+
+    from linework.watch import _ensure_tcl_library
+
+    # Build a fake Python install layout: prefix/lib/tcl9.0/init.tcl
+    fake_prefix = tmp_path / "python-install"
+    tcl_dir = fake_prefix / "lib" / "tcl9.0"
+    tcl_dir.mkdir(parents=True)
+    (tcl_dir / "init.tcl").write_text("# stub")
+    fake_exe = fake_prefix / "bin" / "python3.12"
+    fake_exe.parent.mkdir(parents=True)
+    fake_exe.write_text("# stub")
+
+    monkeypatch.delenv("TCL_LIBRARY", raising=False)
+    monkeypatch.setattr(os.path, "realpath", lambda _path: str(fake_exe))
+
+    _ensure_tcl_library()
+
+    assert os.environ.get("TCL_LIBRARY") == str(tcl_dir)
+
+
+def test_ensure_tcl_library_is_noop_when_already_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """TCL_LIBRARY is not overwritten when it is already set."""
+    import os
+
+    from linework.watch import _ensure_tcl_library
+
+    monkeypatch.setenv("TCL_LIBRARY", "/custom/tcl")
+    _ensure_tcl_library()
+    assert os.environ["TCL_LIBRARY"] == "/custom/tcl"
+
+
+def test_ensure_tcl_library_is_noop_when_no_tcl_found(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """TCL_LIBRARY is not set when no tcl*/init.tcl exists."""
+    import os
+
+    from linework.watch import _ensure_tcl_library
+
+    fake_prefix = tmp_path / "python-install"
+    lib_dir = fake_prefix / "lib"
+    lib_dir.mkdir(parents=True)
+    fake_exe = fake_prefix / "bin" / "python3.12"
+    fake_exe.parent.mkdir(parents=True)
+    fake_exe.write_text("# stub")
+
+    monkeypatch.delenv("TCL_LIBRARY", raising=False)
+    monkeypatch.setattr(os.path, "realpath", lambda _path: str(fake_exe))
+
+    _ensure_tcl_library()
+
+    assert os.environ.get("TCL_LIBRARY") is None
+
+
+# ---------------------------------------------------------------------------
 # Visibility confirmation tests
 # ---------------------------------------------------------------------------
 

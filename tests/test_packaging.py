@@ -119,3 +119,59 @@ def test_uv_tool_install_from_project_runs_installed_cli(tmp_path: Path) -> None
         blank = Image.new("RGBA", rendered.size, (255, 255, 255, 255))
         difference = ImageChops.difference(rendered.convert("RGB"), blank.convert("RGB"))
         assert difference.getbbox() is not None
+
+
+def test_installed_watch_impl_survives_stdin_devnull(tmp_path: Path) -> None:
+    """The installed _watch-impl can load tkinter even when stdin is /dev/null.
+
+    Agent harnesses (e.g. OpenCode) redirect stdin to /dev/null for every
+    command they spawn.  On macOS with python-build-standalone, this breaks
+    Tcl 9's ``dladdr()``-based ``init.tcl`` discovery when the Python binary
+    is a venv symlink.  ``_ensure_tcl_library()`` must fix this transparently.
+    """
+    home_dir = tmp_path / "tool-home"
+    cache_dir = tmp_path / "uv-cache"
+    env = os.environ.copy()
+    env["HOME"] = str(home_dir)
+    if sys.platform == "win32":
+        env["USERPROFILE"] = str(home_dir)
+        env["APPDATA"] = str(home_dir / "AppData" / "Roaming")
+    env["UV_CACHE_DIR"] = str(cache_dir)
+    env["LINEWORK_HOME"] = str(tmp_path / "linework-home")
+    env.pop("TCL_LIBRARY", None)
+
+    install_result = _run(
+        ["uv", "tool", "install", "--python", sys.executable, "--force", str(PROJECT_ROOT)],
+        env=env,
+    )
+    assert install_result.returncode == 0, install_result.stderr
+
+    # Resolve the venv python that the installed tool uses.  We invoke the
+    # binary directly rather than through the entry-point script, because
+    # pytest tmpdir paths often exceed macOS's 127-byte shebang limit.
+    venv_python = str(
+        home_dir / ".local" / "share" / "uv" / "tools" / "linework" / "bin" / "python"
+    )
+    assert Path(venv_python).exists(), f"venv python not found: {venv_python}"
+
+    # Run a minimal tkinter import via the venv python with stdin closed.
+    # This mimics the agent-harness environment that triggered the bug.
+    result = _run(
+        [
+            venv_python,
+            "-c",
+            (
+                "from linework.watch import load_toolkit; "
+                "tk = load_toolkit(); "
+                "r = tk.tk.Tk(); r.withdraw(); "
+                'print("tcl_ok:", r.tk.eval("info library")); '
+                "r.destroy()"
+            ),
+        ],
+        env=env,
+        stdin="",  # stdin closed immediately — same as /dev/null
+    )
+    assert result.returncode == 0, (
+        f"load_toolkit() failed with stdin closed (agent-harness scenario):\n{result.stderr}"
+    )
+    assert "tcl_ok:" in result.stdout

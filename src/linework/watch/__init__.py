@@ -50,8 +50,37 @@ class Toolkit:
     image_tk: Any
 
 
+def _ensure_tcl_library() -> None:
+    """Set TCL_LIBRARY when Tcl's built-in discovery would fail.
+
+    python-build-standalone's Tcl 9 relies on ``dladdr()`` to locate
+    ``init.tcl`` relative to ``libtcl9.0.dylib``.  That discovery breaks on
+    macOS when the Python binary is a venv symlink **and** stdin has been
+    redirected to ``/dev/null`` (common in agent harnesses like OpenCode).
+
+    When ``TCL_LIBRARY`` is already set or when the real Python prefix does
+    not contain a recognisable ``tcl*/init.tcl``, this is a no-op.
+    """
+    import os
+    import sys
+
+    if os.environ.get("TCL_LIBRARY"):
+        return
+
+    real_exe = os.path.realpath(sys.executable)
+    lib_dir = os.path.join(os.path.dirname(os.path.dirname(real_exe)), "lib")
+    if not os.path.isdir(lib_dir):
+        return
+
+    for entry in os.listdir(lib_dir):
+        if entry.startswith("tcl") and os.path.isfile(os.path.join(lib_dir, entry, "init.tcl")):
+            os.environ["TCL_LIBRARY"] = os.path.join(lib_dir, entry)
+            return
+
+
 def load_toolkit() -> Toolkit:
     """Load the standard-library GUI stack on demand."""
+    _ensure_tcl_library()
     try:
         import tkinter as tk
         from tkinter import ttk

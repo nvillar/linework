@@ -209,6 +209,7 @@ Implementation notes:
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 - `linework watch` now preserves unavailable-environment reasons and, on Windows, rejects detached/noninteractive GUI contexts before reporting success
 - watcher startup handshake confirms the window is visible on screen (via `winfo_viewable`) before signalling "ready" to the parent; if the window never becomes visible, the child reports failure and the parent relays a clear error
+- watcher `load_toolkit()` proactively resolves `TCL_LIBRARY` from the real Python binary when Tcl 9's built-in `init.tcl` discovery would fail (works around a `python-build-standalone` / venv-symlink / stdin-redirect interaction on macOS that breaks `dladdr()`-based discovery)
 - version is derived from git tags via `hatch-vcs`; there is no hardcoded version string (see copilot-instructions §6)
 - `linework --version` checks the remote repo for newer tags via `git ls-remote` (5s timeout, best-effort); shows a platform-aware `uv tool install --no-cache --reinstall-package linework git+...@vX.Y.Z` command if an update is available
 - Windows: `_is_pid_alive` uses Win32 `OpenProcess` API instead of `os.kill(pid, 0)` (which sends `CTRL_C_EVENT` on Windows)
