@@ -201,3 +201,107 @@ informed decision quickly.
 Before starting any task, read `DEVELOPMENT.md` to understand the current milestone
 status, what has been completed, and what is in progress. This prevents duplicate
 work and ensures changes align with the project roadmap.
+
+## 9. Design philosophy: golden-path guidance
+
+Linework is an **agent-first** tool. Its primary users are LLM-based agents, not
+humans. This has a core design implication: **the tool must teach its own usage
+progressively, through the output of its commands.**
+
+### Principles
+
+- **Contextual nudges, not upfront documentation.** Agents learn by doing. When
+  an agent hits a friction point, the tool should surface a relevant suggestion at
+  that exact moment — not earlier, and not in a separate help page they may never
+  read.
+
+- **Golden path steering.** Command output should guide agents along the intended
+  workflow. For example:
+  - `linework new` output includes `watch_recommendation`, `inspect_command`,
+    and `reuse_session_hint` — teaching the workflow through the tool's own response.
+  - `inspect` output includes a `filter_hint` when there are many objects, and a
+    `bulk_delete_hint` when filtered results suggest a bulk operation.
+  - `inspect` nudges agents to adopt tag prefixes when many objects lack tags.
+
+- **Teach at the moment of friction.** Nudges appear only when they're relevant:
+  - Filter suggestions appear at >30 objects, not at 5.
+  - Tagging suggestions appear at >50 objects with sparse tags, not universally.
+  - Bulk delete hints appear in filtered inspect results, not in unfiltered ones.
+
+- **Never block.** Nudges are informational — they appear as additional output
+  fields (`hints` in JSON, footer lines in plaintext) and never require
+  acknowledgment or change the command's behavior.
+
+- **Discovery chain.** Features should be discoverable through a natural
+  progression: `linework` (bootstrap) → `linework schema` → `linework schema OP`
+  → contextual hints in command output. Each step leads to the next.
+
+### When adding new features
+
+Always ask: **how will an agent discover this?** If the answer is "by reading the
+docs" or "by guessing the flag name," the feature needs a discovery path. Consider:
+
+1. Does `linework schema` surface it?
+2. Does any existing command output hint at it when relevant?
+3. Is there a moment of friction where this feature would naturally be suggested?
+
+## 10. Usability testing with sub-agents
+
+Linework uses **agent-based usability testing** as an optional, well-defined part
+of the development workflow. Since linework's primary users are LLM-based agents,
+the most representative testing is done by running agents against the tool itself.
+
+### When to run usability tests
+
+- **Before closing a milestone** that changes the command surface, workflow
+  guidance, or discovery chain.
+- **After adding new features** to verify agents can discover and use them without
+  special prompting.
+- **When investigating usability issues** reported by real-world agent users.
+
+Usability testing is **optional** — not every change warrants it. Use judgment:
+if a change is purely internal (e.g., a renderer fix), skip it. If it affects how
+agents interact with the tool, test it.
+
+### How to run usability tests
+
+1. **Choose personas.** Use at least two agents with different models and
+   interaction styles. Recommended personas:
+   - **Careful planner** (e.g., Claude Sonnet) — reads docs thoroughly, plans
+     before acting.
+   - **Fast guesser** (e.g., GPT mini) — acts quickly with minimal reading,
+     relies on trial-and-error.
+   - **Power user** (optional) — exercises advanced features, pushes limits.
+
+2. **Test against the repo checkout, not the installed version.** Use
+   `uv run linework` so agents test the current code, not a stale install.
+
+3. **Give agents a realistic task**, not "test feature X." For example:
+   - "Draw a complex scene with a house, trees, and sky."
+   - "Create a diagram with 20+ labeled components."
+   The agent should discover and use new features organically, not because
+   the prompt tells them to.
+
+4. **Collect artifacts.** Each agent should produce:
+   - An exported PNG of their work.
+   - A brief exit report covering: what worked, what was confusing, discovery
+     path, and any issues.
+
+5. **Analyze findings.** Look for:
+   - Did agents discover new features through the tool's output?
+   - Did agents adopt intended conventions (e.g., tag prefixes)?
+   - Where did agents get stuck or make mistakes?
+   - What features did agents wish existed?
+
+6. **Store artifacts** in the session workspace under `files/` (not in the repo).
+   These are ephemeral — they inform decisions but are not committed.
+
+### Using findings
+
+Usability findings should directly inform:
+- Feature prioritization for the next milestone.
+- Improvements to nudges, hints, and discovery paths.
+- Error message improvements when agents hit common failure modes.
+
+Document notable findings in `DEVELOPMENT.md` milestone entries so the
+rationale for design decisions is preserved.
