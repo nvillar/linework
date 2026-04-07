@@ -21,9 +21,10 @@ SCHEMA_DISCOVERY_SUMMARY = (
 )
 
 WORKFLOW_GUIDANCE_SUMMARY = (
-    "Use `linework new` for persistent sessions. "
+    "Use `linework new` once for a persistent session, then keep reusing that "
+    "same session path for iterative changes. "
     "Use `linework watch` to open a live watcher for the user. "
-    "Use `linework run --out` for disposable headless exports."
+    "Use `linework run --output` for disposable headless exports."
 )
 
 _SCHEMA_DISCOVERY_COMMANDS = (
@@ -34,10 +35,13 @@ _SCHEMA_DISCOVERY_COMMANDS = (
 )
 
 _WORKFLOW_GUIDANCE_COMMANDS = (
-    ("linework new --name idea-board", "persistent session"),
+    ("linework new --name idea-board", "create one persistent session to reuse"),
+    ("linework run --session PATH --json < ops.jsonl", "keep iterating in that same session"),
     ("linework watch --session PATH", "open a live watcher for the user"),
-    ("linework new --stdin --name idea-board", "create a session from an initial batch"),
-    ("linework run --file ops.jsonl --out out.png", "disposable one-shot export"),
+    ("linework inspect --session PATH --json", "read the current scene in that session"),
+    ("linework export --session PATH --output out.png", "export from that same session"),
+    ("linework new --stdin --name idea-board", "create and seed a reusable session"),
+    ("linework run --file ops.jsonl --output out.png", "disposable one-shot export"),
 )
 
 
@@ -76,30 +80,30 @@ Golden path:
   2. Pick a workflow
 {format_workflow_guidance_commands(indent="     ")}
 
-  3. Create a session
-     linework new --name idea-board --json
+  3. Create one session and keep reusing it
+      linework new --name idea-board --json
 
   4. Open a watcher for the user (if they want to see it live)
       linework watch --session PATH
 
-  5. Draw via JSONL batch (primary interface)
+  5. Apply changes to that same session (primary interface)
       linework run --session PATH --json < ops.jsonl
 
-  6. Inspect the scene to discover IDs and labels before editing
+  6. Inspect the scene to discover IDs and tags before editing
       linework inspect --session PATH --json
 
   7. Edit or delete one object
-      linework edit rect --session PATH --id obj_000001 --fill #CCE5FF --json
-      linework delete --session PATH --label note-box --json
+      linework edit rect --session PATH --id obj_000001 --fill "#CCE5FF" --json
+      linework delete --session PATH --tag note-box --json
 
-  8. Export
-      linework export --session PATH --out out.png
-      linework run --file ops.jsonl --out out.png --width 1200 --height 800
+  8. Export from that same session
+      linework export --session PATH --output out.png
+      linework run --file ops.jsonl --output out.png --width 1200 --height 800
 
 JSONL reference (pipe to linework run --session PATH --json):
   {{"op":"draw.line","payload":{{"x1":0,"y1":0,"x2":200,"y2":100}}}}
   {{"op":"draw.arrow","payload":{{"x1":20,"y1":140,"x2":180,"y2":140,"arrowhead":"both","arrow_size":18}}}}
-  {{"op":"draw.rect","payload":{{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","label":"box"}}}}
+  {{"op":"draw.rect","payload":{{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","tag":"box"}}}}
   {{"op":"draw.ellipse","payload":{{"x":280,"y":50,"width":120,"height":80,"fill":"#D9F2E6"}}}}
   {{"op":"draw.circle","payload":{{"x":430,"y":50,"radius":35,"fill":"#FDE68A"}}}}
   {{"op":"draw.polyline","payload":{{"points":[[20,180],[80,150],[140,210]],"stroke":"#333333"}}}}
@@ -107,7 +111,7 @@ JSONL reference (pipe to linework run --session PATH --json):
   {{"op":"draw.text","payload":{{"x":50,"y":50,"width":200,"height":100,"text":"Hello","size":24}}}}
   {{"op":"draw.image","payload":{{"x":420,"y":40,"asset_path":"assets/reference.png"}}}}
   {{"op":"edit.rect","payload":{{"id":"obj_000001","fill":"#CCCCCC"}}}}
-  {{"op":"delete","payload":{{"label":"box"}}}}
+  {{"op":"delete","payload":{{"tag":"box"}}}}
   {{"op":"undo","payload":{{}}}}
 
 Primitives: line, arrow, rect, ellipse, circle, polyline, polygon, text, image
@@ -117,11 +121,12 @@ action; a successful `linework run` batch undoes as one action. `draw.circle`
 and `edit.circle` are convenience aliases stored as ellipses.
 
 Selection:
-  - `inspect` is the read interface for finding object IDs and labels.
-  - `edit` and `delete` accept `--id`, and `delete` also accepts a unique label.
-  - JSONL `delete` accepts `label` instead of `id`.
-  - For `edit`, omitting `id` makes `label` act as the selector, so use `id` when
-    you need to relabel an object.
+  - `inspect` is the read interface for finding object IDs and tags.
+  - `tag` is hidden selector metadata, not visible diagram text.
+  - `edit` and `delete` accept `--id`, and `delete` also accepts a unique tag.
+  - JSONL `delete` accepts `tag` instead of `id`.
+  - For `edit`, omitting `id` makes `tag` act as the selector, so use `id` when
+    you need to retag an object.
 
 Commands:
   linework schema       Print compact overview, one-op reference, or full manifest

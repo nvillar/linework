@@ -78,9 +78,16 @@ def create_session(
 
     created_at = utc_now()
     session_path = resolve_session_path(session, name, created_at=created_at)
+    reuse_empty_directory = False
     with writer_lock(session_path):
         if session_path.exists():
-            raise SessionAlreadyExistsError(f"session already exists: {session_path}")
+            if not session_path.is_dir() or any(session_path.iterdir()):
+                raise SessionAlreadyExistsError(
+                    f"session already exists: {session_path}. "
+                    "Reuse this same session with draw/edit/run/inspect/export by passing "
+                    f"--session {session_path}, or choose a different path for `linework new`."
+                )
+            reuse_empty_directory = True
 
         session_id = session_path.name
         session_name = resolve_session_name(
@@ -116,6 +123,8 @@ def create_session(
 
         try:
             initialize_session_directory(temp_dir, metadata, scene)
+            if reuse_empty_directory:
+                session_path.rmdir()
             temp_dir.replace(session_path)
         except Exception:
             shutil.rmtree(temp_dir, ignore_errors=True)
@@ -505,13 +514,13 @@ def inspect_session(session_path: str | Path) -> InspectResult:
     )
 
 
-def export_session(session_path: str | Path, *, out: str) -> str:
+def export_session(session_path: str | Path, *, output: str) -> str:
     """Export the current scene render to an output path."""
     resolved = Path(session_path).expanduser().resolve()
     scene = read_scene_snapshot(resolved)
     _validate_exportable_assets(scene, session_path=resolved)
 
-    destination = Path(out).expanduser().resolve()
+    destination = Path(output).expanduser().resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         prefix=f".{destination.name}.tmp-",

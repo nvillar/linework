@@ -49,7 +49,7 @@
       "id": "obj_000004",
       "type": "ellipse",
       "visible": true,
-      "label": "node",
+      "tag": "node",
       "x": 104.0,
       "y": 10.0,
       "width": 24.0,

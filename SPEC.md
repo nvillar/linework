@@ -99,13 +99,13 @@ The bundled font becomes part of the rendering contract for the MVP.
   - text
   - image placement
 - Box-based text layout and wrapping controls
-- Object mutation by stable ID or unique live label
-- Object labels as metadata
+- Object mutation by stable ID or unique live tag
+- Object tags as hidden selector metadata
 - Object visibility
 - Delete
 - Whole-action undo
 - JSONL batch mode as the primary agent interface
-- One-shot batch export via `linework run --out`
+- One-shot batch export via `linework run --output`
 - Read-only watcher window
 - Session portability
 - Single-writer locking
@@ -338,7 +338,7 @@ successful operations from one batch share the same `batch_id` so a later
 Normative structure:
 
 ```json
-{"schema_version":1,"op_id":"op_000001","timestamp":"2026-04-03T17:15:30Z","op":"draw.rect","payload":{"id":"obj_000001","x":80.0,"y":120.0,"width":300.0,"height":180.0,"stroke":"#000000","fill":"#EEEEEE","stroke_width":2.0,"visible":true,"label":"api-box"}}
+{"schema_version":1,"op_id":"op_000001","timestamp":"2026-04-03T17:15:30Z","op":"draw.rect","payload":{"id":"obj_000001","x":80.0,"y":120.0,"width":300.0,"height":180.0,"stroke":"#000000","fill":"#EEEEEE","stroke_width":2.0,"visible":true,"tag":"api-box"}}
 ```
 
 `undo` must be recorded as an append-only operation, not as an in-place deletion or rewrite of history.
@@ -443,11 +443,11 @@ The bootstrap output must explain:
 - what `linework` is
 - the recommended discovery flow: `linework schema` for a quick overview, `linework schema OP` for one-operation detail, and `linework schema --json` for the full reference
 - the session model
-- the recommended workflow split: `linework new` for persistent sessions, `linework watch` for live display, `linework run --out` for disposable headless exports
+- the recommended workflow split: `linework new` for persistent sessions, repeated reuse of the same `--session PATH` for iterative changes, `linework watch` for live display, and `linework run --output` for disposable headless exports
 - the JSONL batch workflow as the primary interface
 - the default canvas size and background
 - how `linework new --file/--stdin` can seed a session from an initial batch
-- the inspect → edit/delete workflow for discovering IDs and labels
+- the inspect → edit/delete workflow for discovering IDs and tags
 - the core commands
 - an end-to-end agent example from session creation through JSONL batch to rendered PNG
 - how to discover more help
@@ -483,17 +483,19 @@ Creates a new session.
 Behavior:
 
 - If `--session PATH` is given, create the session there.
+- If `--session PATH` already exists as an empty directory, initialize the session in place there.
 - Otherwise create it under `~/.linework/sessions/`.
 - `--file PATH` or `--stdin` applies an initial JSONL batch immediately after session creation.
 - Print the session path and short session ID.
 - Render the initial blank PNG immediately.
-- Output always includes a `watch_command` hint with the exact command to open a live watcher for this session. In JSON mode this is a `watch_command` field; in plaintext mode it is printed as a `Watch:` line.
+- Output always includes exact next-step hints for reusing the created session. In JSON mode this includes `watch_command`, `run_command`, `inspect_command`, `export_command`, and `reuse_session_hint`; in plaintext mode the same guidance is printed as follow-up lines.
 
 Required semantics:
 
 - default canvas size: `800x800`
 - default background: `#FFFFFF`
 - session creation does not launch the watcher; use `linework watch` separately
+- non-empty existing `--session PATH` targets are rejected with reuse guidance instead of being overwritten
 - when `--json` is used with `--file` or `--stdin`, output includes the created-session fields plus batch result fields (`applied`, `failed`, `results`, `scene_object_count`)
 
 Flags:
@@ -509,29 +511,29 @@ Flags:
 
 ### 9.4 `linework run`
 
-The primary mutation interface. Applies a batch of JSONL operations to an existing session, or exports a one-shot batch result with `--out`.
+The primary mutation interface. Applies a batch of JSONL operations to an existing session, or exports a one-shot batch result with `--output`.
 
 Behavior:
 
-- requires `--session PATH` or `--out PATH`
+- requires `--session PATH` or `--output PATH`
 - reads JSONL from stdin by default
 - supports `--file PATH` to read from a file
-- supports `--out PATH` to export the rendered result after the batch
-- supports `--width INT` and `--height INT` to size the temporary canvas when used with `--out` and without `--session`
-- supports `--background #RRGGBB[AA]` to customize the temporary canvas when used with `--out` and without `--session`
+- supports `--output PATH` to export the rendered result after the batch
+- supports `--width INT` and `--height INT` to size the temporary canvas when used with `--output` and without `--session`
+- supports `--background #RRGGBB[AA]` to customize the temporary canvas when used with `--output` and without `--session`
 - applies operations sequentially
 - stops on first failure
 - prior successful operations remain committed
 - renders `render/latest.png` once after the last successful operation in the batch
 - a later `undo` reverses the successful portion of that batch as one action
-- when `--session` is omitted and `--out` is provided, `linework` must create a temporary default session, apply the batch, export the PNG, and then delete that temporary session; `--width`, `--height`, and `--background` customize that temporary session
+- when `--session` is omitted and `--output` is provided, `linework` must create a temporary default session, apply the batch, export the PNG, and then delete that temporary session; `--width`, `--height`, and `--background` customize that temporary session
 - `--width`, `--height`, and `--background` must be rejected when `--session` is provided
 - for persistent sessions and watcher-first workflows, users should prefer `linework new` followed by `linework run --session`, or seed the session directly with `linework new --file/--stdin`
 
 Each input line must be a JSON object with `op` and `payload` fields:
 
 ```json
-{"op":"draw.rect","payload":{"x":80,"y":120,"width":300,"height":180,"fill":"#EEEEEE","label":"api-box"}}
+{"op":"draw.rect","payload":{"x":80,"y":120,"width":300,"height":180,"fill":"#EEEEEE","tag":"api-box"}}
 {"op":"draw.arrow","payload":{"x1":400,"y1":210,"x2":620,"y2":210,"stroke":"#333333","stroke_width":3,"arrowhead":"end","arrow_size":18}}
 {"op":"draw.text","payload":{"x":80,"y":120,"width":300,"height":180,"text":"API flow","size":28,"fill":"#000000"}}
 ```
@@ -542,7 +544,7 @@ Flags:
 
 - `--session PATH`
 - `--file PATH`
-- `--out PATH`
+- `--output PATH`
 - `--background #RRGGBB[AA]`
 - `--width INT`
 - `--height INT`
@@ -566,13 +568,13 @@ On success (all operations applied):
 }
 ```
 
-When `--out` is provided, the result must additionally include:
+When `--output` is provided, the result must additionally include:
 
 ```json
 {"exported_path": "/path/to/output.png"}
 ```
 
-When `linework run` is used in temporary one-shot mode (`--out` without
+When `linework run` is used in temporary one-shot mode (`--output` without
 `--session`), the JSON payload must omit `session_path` and `latest_render`
 because the temporary session is deleted after export.
 
@@ -611,7 +613,7 @@ The object table must include:
 
 - object ID
 - type
-- optional label
+- optional tag
 - visibility
 - key geometry summary
 
@@ -625,7 +627,7 @@ The object table must include:
   "object_count": 2,
   "latest_render": "/path/to/session/render/latest.png",
   "objects": [
-    {"id": "obj_000001", "type": "rect", "visible": true, "label": "api-box", "x": 80.0, "y": 120.0, "width": 300.0, "height": 180.0},
+    {"id": "obj_000001", "type": "rect", "visible": true, "tag": "api-box", "x": 80.0, "y": 120.0, "width": 300.0, "height": 180.0},
     {"id": "obj_000002", "type": "text", "visible": true, "x": 100.0, "y": 160.0, "text": "API flow", "size": 28.0}
   ]
 }
@@ -642,14 +644,14 @@ Exports the current scene to a user-specified PNG path.
 
 Behavior:
 
-- `--out PATH` is required
+- `--output PATH` is required
 - export may copy or re-render from current state
 - the command must print the final exported path
 
 Flags:
 
 - `--session PATH`
-- `--out PATH`
+- `--output PATH`
 - `--json`
 
 ### 9.7 `linework watch`
@@ -689,7 +691,7 @@ Primitive subcommands:
 ### 9.9 `linework edit`
 
 Convenience command for modifying a single existing object by stable ID or
-unique live label.
+unique live tag.
 
 Primitive subcommands:
 
@@ -710,12 +712,12 @@ Edits must not change stacking order.
 ### 9.10 `linework delete`
 
 Convenience command for deleting a single object by stable object ID or unique
-live label.
+live tag.
 
 Behavior:
 
 - requires `--session PATH`
-- requires `--id OBJ_ID` or `--label LABEL`
+- requires `--id OBJ_ID` or `--tag TAG`
 - removes the object from current scene state
 - preserves recoverability through command history and undo
 
@@ -747,20 +749,20 @@ The convenience primitive commands must use these parameter names:
 
 Create commands may also accept:
 
-- `--label STRING`
+- `--tag STRING`
 - `--visible true|false`
 - applicable style and layout flags such as `--stroke`, `--fill`, `--stroke-width`, `--size`, `--arrowhead`, `--arrow-size`, `--align`, `--valign`, and `--padding`
 
 Edit commands must use the same field names and additionally require:
 
 - `--id OBJ_ID`, or
-- a unique live `label` selector when `id` is omitted
+- a unique live `tag` selector when `id` is omitted
 
-When `linework edit` omits `id`, the `label` field acts as the selector rather
+When `linework edit` omits `id`, the `tag` field acts as the selector rather
 than a metadata update. Callers must use `id` when they need to change the
-object's label.
+object's tag.
 
-`linework edit image` may update geometry, label, visibility, and other common editable fields, but image source replacement is not required in the MVP.
+`linework edit image` may update geometry, tag, visibility, and other common editable fields, but image source replacement is not required in the MVP.
 
 All convenience commands support `--json` for structured output, following the same output contract as a single-operation `linework run --json` call.
 
@@ -773,7 +775,7 @@ Every object in `scene.json` must include:
 - `id`
 - `type`
 - `visible`
-- `label` optional
+- `tag` optional
 
 Objects may also include common style fields where applicable:
 
@@ -788,14 +790,14 @@ Default object semantics:
 - `fill` defaults to absent or null when not supplied
 - `stroke_width` defaults to `2.0` when applicable
 
-### 10.2 Labels
+### 10.2 Tags
 
-Labels are optional human-oriented metadata.
+Tags are optional hidden selector metadata. They are not visible rendered text.
 
-- Labels may be set during create or edit.
-- `delete` may target a unique live label instead of an ID.
-- `edit.*` may target a unique live label when `id` is omitted.
-- If multiple live objects share a label, label-based selection must fail and
+- Tags may be set during create or edit.
+- `delete` may target a unique live tag instead of an ID.
+- `edit.*` may target a unique live tag when `id` is omitted.
+- If multiple live objects share a tag, tag-based selection must fail and
   require `id` for disambiguation.
 
 ### 10.3 Coordinates and units
@@ -817,6 +819,9 @@ compositing. Translucent objects blend with the current scene content rather
 than overwriting earlier semi-transparent pixels.
 
 Named colors and other color syntaxes are out of scope.
+
+Shell-facing examples should quote these values (for example `"#RRGGBB"` or
+`"#RRGGBBAA"`) so the leading `#` is not treated as a shell comment.
 
 ### 10.5 Bounds
 
@@ -1056,20 +1061,20 @@ It is batch-oriented, not a persistent daemon protocol.
 Each input line is a JSON object with `op` and `payload` fields:
 
 ```json
-{"op":"draw.rect","payload":{"x":80.0,"y":120.0,"width":300.0,"height":180.0,"stroke":"#000000","fill":"#EEEEEE","stroke_width":2.0,"label":"api-box"}}
+{"op":"draw.rect","payload":{"x":80.0,"y":120.0,"width":300.0,"height":180.0,"stroke":"#000000","fill":"#EEEEEE","stroke_width":2.0,"tag":"api-box"}}
 {"op":"draw.arrow","payload":{"x1":340.0,"y1":210.0,"x2":520.0,"y2":210.0,"stroke":"#333333","stroke_width":3.0,"arrowhead":"both","arrow_size":18.0}}
 {"op":"draw.circle","payload":{"x":560.0,"y":120.0,"radius":28.0,"fill":"#BFDBFE"}}
-{"op":"draw.polygon","payload":{"points":[[380.0,120.0],[520.0,60.0],[620.0,160.0]],"fill":"#FF6666","stroke":"#AA3333","label":"roof"}}
+{"op":"draw.polygon","payload":{"points":[[380.0,120.0],[520.0,60.0],[620.0,160.0]],"fill":"#FF6666","stroke":"#AA3333","tag":"roof"}}
 {"op":"draw.text","payload":{"x":80.0,"y":120.0,"width":300.0,"height":180.0,"text":"API flow","size":28.0,"fill":"#000000"}}
 {"op":"edit.rect","payload":{"id":"obj_000001","fill":"#CCCCCC"}}
-{"op":"delete","payload":{"label":"api-box"}}
+{"op":"delete","payload":{"tag":"api-box"}}
 {"op":"undo","payload":{}}
 ```
 
 If callers omit object IDs for draw operations, `linework` generates sequential
 IDs. The assigned IDs are returned in the results and recorded in the canonical
-command log. `delete` may target a unique live label instead of an ID. For
-`edit.*`, omitting `id` makes the `label` field act as the selector.
+command log. `delete` may target a unique live tag instead of an ID. For
+`edit.*`, omitting `id` makes the `tag` field act as the selector.
 
 ### 12.3 Output format
 
@@ -1086,18 +1091,18 @@ SESSION=/path/to/session
 
 # 3. Draw a diagram via JSONL batch
 cat <<'EOF' | linework run --session "$SESSION" --json
-{"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","label":"server"}}
+{"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","tag":"server"}}
 {"op":"draw.text","payload":{"x":50,"y":50,"width":200,"height":100,"text":"Server","size":20}}
-{"op":"draw.rect","payload":{"x":350,"y":50,"width":200,"height":100,"fill":"#E8E8E8","label":"client"}}
+{"op":"draw.rect","payload":{"x":350,"y":50,"width":200,"height":100,"fill":"#E8E8E8","tag":"client"}}
 {"op":"draw.text","payload":{"x":350,"y":50,"width":200,"height":100,"text":"Client","size":20}}
 {"op":"draw.line","payload":{"x1":250,"y1":100,"x2":350,"y2":100,"stroke":"#333333","stroke_width":3}}
 EOF
 
-# 4. Inspect the result and discover IDs/labels before editing
+# 4. Inspect the result and discover IDs/tags before editing
 linework inspect --session "$SESSION" --json
 
 # 5. Export to a shareable PNG
-linework export --session "$SESSION" --out ./diagram.png
+linework export --session "$SESSION" --output ./diagram.png
 ```
 
 ## 13. Rendering Contract
@@ -1212,7 +1217,7 @@ The test harness must validate at least:
 - `linework schema`
 - `linework new`
 - `linework run` with JSONL input
-- `linework run --out`
+- `linework run --output`
 - `linework inspect`
 - `linework export`
 - convenience draw, edit, delete, undo commands

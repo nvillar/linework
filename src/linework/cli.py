@@ -67,11 +67,12 @@ Workflow choice:
 {format_workflow_guidance_commands(indent="  ")}
 
 Golden path:
+  Create one session and keep reusing the same --session PATH for iterative changes.
   linework new --name idea-board --json
   linework run --session PATH --json < ops.jsonl
   linework inspect --session PATH --json
-  linework edit rect --session PATH --id obj_000001 --fill #CCE5FF --json
-  linework export --session PATH --out out.png
+  linework edit rect --session PATH --id obj_000001 --fill "#CCE5FF" --json
+  linework export --session PATH --output out.png
 """
 
 _NEW_EPILOG = f"""\
@@ -82,28 +83,31 @@ Examples:
   cat ops.jsonl | linework new --stdin --name idea-board --json
   linework new --width {DEFAULT_CANVAS_WIDTH} --height {DEFAULT_CANVAS_HEIGHT}
 
-JSON output includes a watch_command field. Plaintext output prints a Watch:
-line for opening a live watcher window.
+After creation, reuse the printed session path for future draw/edit/run/export
+commands instead of creating a new session for each change.
+
+JSON output includes watch_command, run_command, inspect_command, and
+export_command fields. Plaintext output prints matching next-step hints.
 """
 
 _RUN_EPILOG = """\
 Examples:
   linework run --session PATH --json < ops.jsonl
   linework run --session PATH --file ops.jsonl
-  linework run --file ops.jsonl --out out.png --width 1200 --height 800 --background #111827
+  linework run --file ops.jsonl --output out.png --width 1200 --height 800 --background "#111827"
 
 JSONL input:
   {"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100}}
   {"op":"draw.arrow","payload":{"x1":20,"y1":40,"x2":160,"y2":40,"arrowhead":"both","arrow_size":18}}
   {"op":"draw.circle","payload":{"x":40,"y":40,"radius":30}}
   {"op":"draw.polygon","payload":{"points":[[220,180],[300,120],[360,210]],"fill":"#FF6666"}}
-  {"op":"delete","payload":{"label":"note-box"}}
+  {"op":"delete","payload":{"tag":"note-box"}}
 
-Provide --out without --session to use a temporary throwaway session that is
+Provide --output without --session to use a temporary throwaway session that is
 exported and then deleted. Use --width, --height, and --background to
-customize that temporary canvas. For persistent sessions and live watcher
-behavior, prefer `linework new` and then `linework run --session`, or seed
-the session directly with `linework new --file/--stdin`.
+customize that temporary canvas. For iterative work, create one session with
+`linework new` and keep reusing that same `--session PATH`. Batch multi-step
+updates in one `linework run --session PATH` call.
 """
 
 _SCHEMA_EPILOG = f"""\
@@ -116,32 +120,32 @@ Examples:
   linework inspect --session PATH
   linework inspect --session PATH --json
 
-Use inspect before edit/delete to discover stable object IDs and labels.
+Use inspect before edit/delete to discover stable object IDs and tags.
 """
 
 _DRAW_EPILOG = """\
 Examples:
   linework draw arrow --session PATH --x1 20 --y1 40 --x2 180 --y2 40
     --arrowhead both --arrow-size 18
-  linework draw rect --session PATH --x 50 --y 50 --width 200 --height 100 --fill #E8E8E8
-  linework draw circle --session PATH --x 240 --y 60 --radius 30 --fill #FDE68A
+  linework draw rect --session PATH --x 50 --y 50 --width 200 --height 100 --fill "#E8E8E8"
+  linework draw circle --session PATH --x 240 --y 60 --radius 30 --fill "#FDE68A"
   linework draw polygon --session PATH --point 220,180 --point 300,120 --point 360,210
 """
 
 _EDIT_EPILOG = """\
 Examples:
   linework edit arrow --session PATH --id obj_000001 --arrowhead both --arrow-size 18
-  linework edit rect --session PATH --id obj_000001 --fill #CCE5FF
-  linework edit rect --session PATH --label note-box --fill #CCE5FF
+  linework edit rect --session PATH --id obj_000001 --fill "#CCE5FF"
+  linework edit rect --session PATH --tag note-box --fill "#CCE5FF"
 
-When --id is omitted, --label selects the target. Use --id when you need to
-change the object's label.
+When --id is omitted, --tag selects the target. Use --id when you need to
+change the object's tag.
 """
 
 _DELETE_EPILOG = """\
 Examples:
   linework delete --session PATH --id obj_000001
-  linework delete --session PATH --label note-box
+  linework delete --session PATH --tag note-box
 """
 
 _UNDO_EPILOG = """\
@@ -257,12 +261,17 @@ def build_parser() -> argparse.ArgumentParser:
             "Create a new session directory with a blank render, or seed it from "
             "an initial JSONL batch via --file or --stdin. The default canvas is "
             f"{DEFAULT_CANVAS_WIDTH}x{DEFAULT_CANVAS_HEIGHT} with a "
-            f"{DEFAULT_CANVAS_BACKGROUND} background."
+            f"{DEFAULT_CANVAS_BACKGROUND} background. Reuse the created session "
+            "path for iterative changes instead of creating a fresh session for "
+            "every edit."
         ),
         epilog=_NEW_EPILOG,
         formatter_class=_HelpFormatter,
     )
-    new_parser.add_argument("--session", help="Explicit session directory path.")
+    new_parser.add_argument(
+        "--session",
+        help="Explicit session directory path for the persistent session you will reuse.",
+    )
     new_parser.add_argument("--name", help="Human-readable session name.")
     new_parser.add_argument(
         "--width",
@@ -279,7 +288,7 @@ def build_parser() -> argparse.ArgumentParser:
     new_parser.add_argument(
         "--background",
         default=DEFAULT_CANVAS_BACKGROUND,
-        help="Canvas background color in #RRGGBB or #RRGGBBAA form.",
+        help="Canvas background color in #RRGGBB or #RRGGBBAA form. Quote the value in shells.",
     )
     new_batch_group = new_parser.add_mutually_exclusive_group()
     new_batch_group.add_argument(
@@ -299,20 +308,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Apply JSONL operations (primary interface).",
         description=(
             "Apply JSONL operations to an existing session, or export a one-shot "
-            "throwaway batch with --out. Operations run in order, stop on first "
+            "throwaway batch with --output. Operations run in order, stop on first "
             "failure, and render once at the end. When used without --session, "
             "--width, --height, and --background customize the temporary canvas. "
-            "For persistent sessions and watcher-first workflows, prefer "
-            "`linework new` and then `linework run --session`, or seed the "
-            "session directly with `linework new --file/--stdin`."
+            "For iterative changes, create one persistent session with "
+            "`linework new` and keep reusing the same `--session PATH`."
         ),
         epilog=_RUN_EPILOG,
         formatter_class=_HelpFormatter,
     )
-    run_parser.add_argument("--session", help="Session directory path.")
+    run_parser.add_argument(
+        "--session",
+        help="Existing session directory path to reuse for iterative changes.",
+    )
     run_parser.add_argument("--file", help="Read JSONL from a file instead of stdin.")
     run_parser.add_argument(
-        "--out",
+        "--output",
         help=(
             "Optional PNG export path. When used without --session, linework creates "
             "a temporary session, exports the result, and deletes the session."
@@ -321,20 +332,22 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument(
         "--background",
         help=(
-            "Canvas background color for the temporary session created by --out "
-            "when --session is omitted."
+            "Canvas background color for the temporary session created by --output "
+            "when --session is omitted. Quote the value in shells."
         ),
     )
     run_parser.add_argument(
         "--width",
         type=int,
-        help=("Canvas width for the temporary session created by --out when --session is omitted."),
+        help=(
+            "Canvas width for the temporary session created by --output when --session is omitted."
+        ),
     )
     run_parser.add_argument(
         "--height",
         type=int,
         help=(
-            "Canvas height for the temporary session created by --out when --session is omitted."
+            "Canvas height for the temporary session created by --output when --session is omitted."
         ),
     )
     run_parser.add_argument("--json", action="store_true", help="Print JSON output.")
@@ -355,11 +368,15 @@ def build_parser() -> argparse.ArgumentParser:
         "export",
         help="Export PNG to a path.",
         description="Render the current scene to a PNG at a user-chosen path.",
-        epilog="Example:\n  linework export --session PATH --out out.png\n",
+        epilog="Example:\n  linework export --session PATH --output out.png\n",
         formatter_class=_HelpFormatter,
     )
-    export_parser.add_argument("--session", required=True, help="Session directory path.")
-    export_parser.add_argument("--out", required=True, help="Output PNG path.")
+    export_parser.add_argument(
+        "--session",
+        required=True,
+        help="Existing session directory path to export from.",
+    )
+    export_parser.add_argument("--output", required=True, help="Output PNG path.")
     export_parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
     # --- watch ---
@@ -411,7 +428,7 @@ def build_parser() -> argparse.ArgumentParser:
         "edit",
         help="Modify a single object (convenience).",
         description=(
-            "Modify one existing object. Use `inspect` first to discover object IDs and labels."
+            "Modify one existing object. Use `inspect` first to discover object IDs and tags."
         ),
         epilog=_EDIT_EPILOG,
         formatter_class=_HelpFormatter,
@@ -431,15 +448,15 @@ def build_parser() -> argparse.ArgumentParser:
     delete_parser = subparsers.add_parser(
         "delete",
         help="Delete a single object.",
-        description="Delete one object by stable ID or unique live label.",
+        description="Delete one object by stable ID or unique live tag.",
         epilog=_DELETE_EPILOG,
         formatter_class=_HelpFormatter,
     )
     _add_session_argument(delete_parser)
     delete_parser.add_argument("--id", help="Stable object identifier.")
     delete_parser.add_argument(
-        "--label",
-        help="Unique live object label to delete when --id is omitted.",
+        "--tag",
+        help="Unique live object tag to delete when --id is omitted.",
     )
     _add_json_argument(delete_parser)
 
@@ -520,7 +537,11 @@ def _error(message: str, *, use_json: bool) -> int:
 
 def _add_session_argument(parser: argparse.ArgumentParser) -> None:
     """Add the required session flag to a parser."""
-    parser.add_argument("--session", required=True, help="Session directory path.")
+    parser.add_argument(
+        "--session",
+        required=True,
+        help="Existing session directory path. Reuse the same path for iterative changes.",
+    )
 
 
 def _add_json_argument(parser: argparse.ArgumentParser) -> None:
@@ -528,9 +549,9 @@ def _add_json_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
 
-def _add_label_argument(parser: argparse.ArgumentParser) -> None:
-    """Add the optional label flag."""
-    parser.add_argument("--label", help="Optional object label.")
+def _add_tag_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the optional hidden tag flag."""
+    parser.add_argument("--tag", help="Optional hidden object tag for later selection.")
 
 
 def _add_visible_argument(parser: argparse.ArgumentParser) -> None:
@@ -544,12 +565,18 @@ def _add_visible_argument(parser: argparse.ArgumentParser) -> None:
 
 def _add_stroke_argument(parser: argparse.ArgumentParser) -> None:
     """Add the optional stroke color flag."""
-    parser.add_argument("--stroke", help="Stroke color in #RRGGBB or #RRGGBBAA form.")
+    parser.add_argument(
+        "--stroke",
+        help="Stroke color in #RRGGBB or #RRGGBBAA form. Quote the value in shells.",
+    )
 
 
 def _add_fill_argument(parser: argparse.ArgumentParser) -> None:
     """Add the optional fill color flag."""
-    parser.add_argument("--fill", help="Fill color in #RRGGBB or #RRGGBBAA form.")
+    parser.add_argument(
+        "--fill",
+        help="Fill color in #RRGGBB or #RRGGBBAA form. Quote the value in shells.",
+    )
 
 
 def _add_stroke_width_argument(parser: argparse.ArgumentParser) -> None:
@@ -562,12 +589,12 @@ def _add_edit_common_arguments(parser: argparse.ArgumentParser) -> None:
     _add_session_argument(parser)
     parser.add_argument(
         "--id",
-        help="Stable object identifier. When omitted, --label selects the target object.",
+        help="Stable object identifier. When omitted, --tag selects the target object.",
     )
     parser.add_argument(
-        "--label",
-        help="When --id is provided, set the object label. When --id is omitted, "
-        "select the target by its unique live label.",
+        "--tag",
+        help="When --id is provided, set the hidden object tag. When --id is omitted, "
+        "select the target by its unique live tag.",
     )
     _add_visible_argument(parser)
     _add_json_argument(parser)
@@ -689,7 +716,7 @@ def _add_draw_line_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     parser = subparsers.add_parser("line", help="Draw a line.", formatter_class=_HelpFormatter)
     _add_session_argument(parser)
     _add_line_geometry(parser, required=True)
-    _add_label_argument(parser)
+    _add_tag_argument(parser)
     _add_visible_argument(parser)
     _add_stroke_argument(parser)
     _add_stroke_width_argument(parser)
@@ -701,7 +728,7 @@ def _add_draw_arrow_parser(subparsers: argparse._SubParsersAction[argparse.Argum
     parser = subparsers.add_parser("arrow", help="Draw an arrow.", formatter_class=_HelpFormatter)
     _add_session_argument(parser)
     _add_line_geometry(parser, required=True)
-    _add_label_argument(parser)
+    _add_tag_argument(parser)
     _add_visible_argument(parser)
     _add_stroke_argument(parser)
     _add_stroke_width_argument(parser)
@@ -722,7 +749,7 @@ def _add_draw_rect_like_parser(
     )
     _add_session_argument(parser)
     _add_rect_like_geometry(parser, required=True)
-    _add_label_argument(parser)
+    _add_tag_argument(parser)
     _add_visible_argument(parser)
     _add_stroke_argument(parser)
     _add_fill_argument(parser)
@@ -737,7 +764,7 @@ def _add_draw_circle_parser(
     parser = subparsers.add_parser("circle", help="Draw a circle.", formatter_class=_HelpFormatter)
     _add_session_argument(parser)
     _add_circle_geometry(parser, required=True)
-    _add_label_argument(parser)
+    _add_tag_argument(parser)
     _add_visible_argument(parser)
     _add_stroke_argument(parser)
     _add_fill_argument(parser)
@@ -756,7 +783,7 @@ def _add_draw_polyline_parser(
     )
     _add_session_argument(parser)
     _add_polyline_points(parser, required=True)
-    _add_label_argument(parser)
+    _add_tag_argument(parser)
     _add_visible_argument(parser)
     _add_stroke_argument(parser)
     _add_stroke_width_argument(parser)
@@ -774,7 +801,7 @@ def _add_draw_polygon_parser(
     )
     _add_session_argument(parser)
     _add_polyline_points(parser, required=True)
-    _add_label_argument(parser)
+    _add_tag_argument(parser)
     _add_visible_argument(parser)
     _add_stroke_argument(parser)
     _add_fill_argument(parser)
@@ -793,7 +820,7 @@ def _add_draw_text_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     _add_text_geometry(parser, required=True)
     parser.add_argument("--size", type=float, help="Text size in pixels.")
     _add_text_layout_arguments(parser)
-    _add_label_argument(parser)
+    _add_tag_argument(parser)
     _add_visible_argument(parser)
     _add_fill_argument(parser)
     _add_json_argument(parser)
@@ -812,7 +839,7 @@ def _add_draw_image_parser(subparsers: argparse._SubParsersAction[argparse.Argum
     parser.add_argument("--y", type=float, required=True, help="Top-left y coordinate.")
     parser.add_argument("--width", type=float, help="Width in pixels.")
     parser.add_argument("--height", type=float, help="Height in pixels.")
-    _add_label_argument(parser)
+    _add_tag_argument(parser)
     _add_visible_argument(parser)
     _add_json_argument(parser)
 
@@ -939,7 +966,7 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
     draw_type = args.draw_type
     if draw_type == "line":
         payload = {"x1": args.x1, "y1": args.y1, "x2": args.x2, "y2": args.y2}
-        _include_optional_values(payload, args, "label", "visible", "stroke", "stroke_width")
+        _include_optional_values(payload, args, "tag", "visible", "stroke", "stroke_width")
         return payload
 
     if draw_type == "arrow":
@@ -947,7 +974,7 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
         _include_optional_values(
             payload,
             args,
-            "label",
+            "tag",
             "visible",
             "stroke",
             "stroke_width",
@@ -966,7 +993,7 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
         _include_optional_values(
             payload,
             args,
-            "label",
+            "tag",
             "visible",
             "stroke",
             "fill",
@@ -979,7 +1006,7 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
         _include_optional_values(
             payload,
             args,
-            "label",
+            "tag",
             "visible",
             "stroke",
             "fill",
@@ -989,7 +1016,7 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
 
     if draw_type == "polyline":
         payload = {"points": args.points}
-        _include_optional_values(payload, args, "label", "visible", "stroke", "stroke_width")
+        _include_optional_values(payload, args, "tag", "visible", "stroke", "stroke_width")
         return payload
 
     if draw_type == "polygon":
@@ -997,7 +1024,7 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
         _include_optional_values(
             payload,
             args,
-            "label",
+            "tag",
             "visible",
             "stroke",
             "fill",
@@ -1020,7 +1047,7 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
             "align",
             "valign",
             "padding",
-            "label",
+            "tag",
             "visible",
             "fill",
         )
@@ -1028,7 +1055,7 @@ def _build_draw_payload(args: argparse.Namespace) -> dict[str, object]:
 
     if draw_type == "image":
         payload = {"x": args.x, "y": args.y}
-        _include_optional_values(payload, args, "width", "height", "label", "visible")
+        _include_optional_values(payload, args, "width", "height", "tag", "visible")
         return payload
 
     raise ValueError(f"unsupported draw type: {draw_type}")
@@ -1039,10 +1066,10 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
     payload: dict[str, object] = {}
     if args.id is not None:
         payload["id"] = args.id
-    elif args.label is not None:
-        payload["label"] = args.label
+    elif args.tag is not None:
+        payload["tag"] = args.tag
     else:
-        raise ValueError("id or label must be provided for edit")
+        raise ValueError("id or tag must be provided for edit")
     edit_type = args.edit_type
 
     if edit_type == "line":
@@ -1053,7 +1080,7 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             "y1",
             "x2",
             "y2",
-            "label",
+            "tag",
             "visible",
             "stroke",
             "stroke_width",
@@ -1066,7 +1093,7 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             "y1",
             "x2",
             "y2",
-            "label",
+            "tag",
             "visible",
             "stroke",
             "stroke_width",
@@ -1081,7 +1108,7 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             "y",
             "width",
             "height",
-            "label",
+            "tag",
             "visible",
             "stroke",
             "fill",
@@ -1094,7 +1121,7 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             "x",
             "y",
             "radius",
-            "label",
+            "tag",
             "visible",
             "stroke",
             "fill",
@@ -1104,7 +1131,7 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
         _include_optional_values(
             payload,
             args,
-            "label",
+            "tag",
             "visible",
             "stroke",
             "stroke_width",
@@ -1115,7 +1142,7 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
         _include_optional_values(
             payload,
             args,
-            "label",
+            "tag",
             "visible",
             "stroke",
             "fill",
@@ -1136,7 +1163,7 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             "align",
             "valign",
             "padding",
-            "label",
+            "tag",
             "visible",
             "fill",
         )
@@ -1148,7 +1175,7 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             "y",
             "width",
             "height",
-            "label",
+            "tag",
             "visible",
         )
     else:
@@ -1163,9 +1190,9 @@ def _build_delete_payload(args: argparse.Namespace) -> dict[str, object]:
     """Build a convenience delete payload from CLI arguments."""
     if args.id is not None:
         return {"id": args.id}
-    if args.label is not None:
-        return {"label": args.label}
-    raise ValueError("id or label must be provided for delete")
+    if args.tag is not None:
+        return {"tag": args.tag}
+    raise ValueError("id or tag must be provided for delete")
 
 
 def _single_operation_payload(result: MutationResult) -> dict[str, object]:
@@ -1227,6 +1254,12 @@ def _new_output_payload(
     """Serialize new-session output with optional initial-batch metadata."""
     payload = created.to_dict()
     payload["watch_command"] = f"linework watch --session {created.session_path}"
+    payload["run_command"] = f"linework run --session {created.session_path}"
+    payload["inspect_command"] = f"linework inspect --session {created.session_path}"
+    payload["export_command"] = f"linework export --session {created.session_path} --output out.png"
+    payload["reuse_session_hint"] = (
+        "Reuse this session path for iterative changes instead of creating a new session."
+    )
     if batch_result is not None:
         payload.update(
             {
@@ -1257,6 +1290,10 @@ def _emit_new_session_result(
         if batch_result.failed:
             print(f"Failed: {batch_result.failed['op']}: {batch_result.failed['error']}")
         print(f"Objects: {batch_result.scene_object_count}")
+    print("Reuse this session path for iterative changes:")
+    print(f"  linework run --session {created.session_path} --json < ops.jsonl")
+    print(f"  linework inspect --session {created.session_path} --json")
+    print(f"  linework export --session {created.session_path} --output out.png")
     print(f"Watch: linework watch --session {created.session_path}")
     return 1 if batch_result is not None and batch_result.failed is not None else 0
 
@@ -1565,12 +1602,15 @@ def cmd_schema(args: argparse.Namespace) -> int:
     print()
     print("Rules:")
     print("  draw.<type>  listed draw fields are required; optional fields remain optional")
-    print("  edit.<type>  selector(id or unique live label) required; object fields are optional")
-    print("  delete       selector(id or unique live label)")
+    print("  edit.<type>  selector(id or unique live tag) required; object fields are optional")
+    print("  delete       selector(id or unique live tag)")
     print("  undo         no payload")
     print()
     print("Special values:")
-    print("  colors: #RRGGBB or #RRGGBBAA (alpha-composited in stacking order)")
+    print(
+        "  colors: #RRGGBB or #RRGGBBAA "
+        "(alpha-composited in stacking order; quote in shell commands)"
+    )
     print(f"  arrowhead: {', '.join(ARROWHEAD_MODES)} (default: {ARROWHEAD_MODES[0]})")
     print(f"  align: {', '.join(TEXT_ALIGNS)} (default: center)")
     print(f"  valign: {', '.join(TEXT_VALIGNS)} (default: middle)")
@@ -1580,9 +1620,10 @@ def cmd_schema(args: argparse.Namespace) -> int:
     print()
     print("Notes:")
     print(
-        "  use `linework inspect --session PATH --json` to discover IDs and labels "
-        "before edit/delete"
+        "  use `linework inspect --session PATH --json` to discover IDs and tags before edit/delete"
     )
+    print("  `tag` is hidden selector metadata, not visible diagram text")
+    print("  create one session, then keep reusing the same `--session PATH` as you iterate")
     print("  `draw.circle` / `edit.circle` are convenience aliases stored as ellipses")
     print("  `edit.image` changes placement/size only; `asset_path` is fixed after creation")
     return 0
@@ -1641,8 +1682,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     except (OSError, ValueError) as exc:
         return _error(str(exc), use_json=args.json)
 
-    if args.session is None and args.out is None:
-        return _error("either --session or --out must be provided", use_json=args.json)
+    if args.session is None and args.output is None:
+        return _error("either --session or --output must be provided", use_json=args.json)
     one_shot_options = [
         flag
         for flag, value in (
@@ -1654,14 +1695,19 @@ def cmd_run(args: argparse.Namespace) -> int:
     ]
     if args.session is not None and one_shot_options:
         return _error(
-            f"{', '.join(one_shot_options)} is only supported with --out when --session is omitted",
+            (
+                f"{', '.join(one_shot_options)} is only supported with --output "
+                "when --session is omitted"
+            ),
             use_json=args.json,
         )
 
     try:
         if args.session is not None:
             result = apply_batch(args.session, operations=operations)
-            exported_path = export_session(args.session, out=args.out) if args.out else None
+            exported_path = (
+                export_session(args.session, output=args.output) if args.output else None
+            )
             return _emit_batch_result(
                 result=result,
                 use_json=args.json,
@@ -1678,7 +1724,7 @@ def cmd_run(args: argparse.Namespace) -> int:
                 background=args.background or DEFAULT_CANVAS_BACKGROUND,
             )
             result = apply_batch(created.session_path, operations=operations)
-            exported_path = export_session(created.session_path, out=args.out)
+            exported_path = export_session(created.session_path, output=args.output)
             return _emit_batch_result(
                 result=result,
                 use_json=args.json,
@@ -1736,15 +1782,15 @@ def cmd_inspect(args: argparse.Namespace) -> int:
 
     if result.objects:
         print()
-        print(f"{'ID':<14} {'Type':<10} {'Label':<16} {'Vis':>3}  Geometry")
+        print(f"{'ID':<14} {'Type':<10} {'Tag':<16} {'Vis':>3}  Geometry")
         print(f"{'─' * 14} {'─' * 10} {'─' * 16} {'─' * 3}  {'─' * 30}")
         for obj in result.objects:
             obj_id = str(obj.get("id", ""))
             obj_type = str(obj.get("type", ""))
-            label = str(obj.get("label", "")) if obj.get("label") else ""
+            tag = str(obj.get("tag", "")) if obj.get("tag") else ""
             visible = "yes" if obj.get("visible", True) else "no"
             geometry = _format_geometry(obj)
-            print(f"{obj_id:<14} {obj_type:<10} {label:<16} {visible:>3}  {geometry}")
+            print(f"{obj_id:<14} {obj_type:<10} {tag:<16} {visible:>3}  {geometry}")
 
     return 0
 
@@ -1796,7 +1842,7 @@ def _format_geometry(obj: dict[str, object]) -> str:
 def cmd_export(args: argparse.Namespace) -> int:
     """Handle ``linework export``."""
     try:
-        exported_path = export_session(args.session, out=args.out)
+        exported_path = export_session(args.session, output=args.output)
     except (OSError, SessionError) as exc:
         return _error(str(exc), use_json=args.json)
 

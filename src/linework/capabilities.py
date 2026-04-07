@@ -42,17 +42,17 @@ def _example(op: str, payload: dict[str, object]) -> dict[str, object]:
     return {"op": op, "payload": payload}
 
 
-def _selector_spec(*, allow_label_only_note: str) -> dict[str, object]:
+def _selector_spec(*, allow_tag_only_note: str) -> dict[str, object]:
     return {
-        "one_of": ["id", "label"],
+        "one_of": ["id", "tag"],
         "fields": {
             "id": _field("string"),
-            "label": _field("string", description=allow_label_only_note),
+            "tag": _field("string", description=allow_tag_only_note),
         },
     }
 
 
-_LABEL_FIELD = _field("string|null")
+_TAG_FIELD = _field("string|null")
 _VISIBLE_FIELD = _field("boolean", default=True)
 _COLOR_DESCRIPTION = "#RRGGBB or #RRGGBBAA; alpha-composited in stacking order"
 _STROKE_FIELD = _field("color", default="#000000", description=_COLOR_DESCRIPTION)
@@ -86,8 +86,8 @@ _ARROW_SIZE_FIELD = _field(
 _POINTS_FIELD = _field("points")
 
 _DRAW_SELECTOR_NOTE = "Use inspect to discover stable IDs before editing."
-_EDIT_SELECTOR_NOTE = "Must be a unique live label when id is omitted."
-_DELETE_SELECTOR_NOTE = "Must be a unique live label when id is omitted."
+_EDIT_SELECTOR_NOTE = "Must be a unique live tag when id is omitted."
+_DELETE_SELECTOR_NOTE = "Must be a unique live tag when id is omitted."
 
 _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
     "draw.line": {
@@ -101,7 +101,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
             "y2": _field("number"),
         },
         "optional": {
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "stroke_width": _STROKE_WIDTH_FIELD,
@@ -122,7 +122,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
             "y2": _field("number"),
         },
         "optional": {
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "stroke_width": _STROKE_WIDTH_FIELD,
@@ -152,7 +152,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
             "height": _field("positive-number"),
         },
         "optional": {
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "fill": _FILL_FIELD,
@@ -174,7 +174,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
             "height": _field("positive-number"),
         },
         "optional": {
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "fill": _FILL_FIELD,
@@ -195,7 +195,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
             "radius": _field("positive-number"),
         },
         "optional": {
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "fill": _FILL_FIELD,
@@ -212,7 +212,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "description": "Create an open polyline.",
         "required": {"points": _POINTS_FIELD},
         "optional": {
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "stroke_width": _STROKE_WIDTH_FIELD,
@@ -228,7 +228,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "description": "Create a closed polygon.",
         "required": {"points": _POINTS_FIELD},
         "optional": {
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "fill": _FILL_FIELD,
@@ -252,7 +252,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         },
         "optional": {
             "size": _TEXT_SIZE_FIELD,
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "fill": _field(
                 "color|null",
@@ -286,7 +286,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "optional": {
             "width": _field("positive-number"),
             "height": _field("positive-number"),
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
         },
         "example": _example(
@@ -298,13 +298,13 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "category": "edit",
         "stored_object_type": "line",
         "description": "Edit a line.",
-        "selector": _selector_spec(allow_label_only_note=_EDIT_SELECTOR_NOTE),
+        "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x1": _field("number"),
             "y1": _field("number"),
             "x2": _field("number"),
             "y2": _field("number"),
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "stroke_width": _STROKE_WIDTH_FIELD,
@@ -315,13 +315,13 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "category": "edit",
         "stored_object_type": "arrow",
         "description": "Edit an arrow.",
-        "selector": _selector_spec(allow_label_only_note=_EDIT_SELECTOR_NOTE),
+        "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x1": _field("number"),
             "y1": _field("number"),
             "x2": _field("number"),
             "y2": _field("number"),
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "stroke_width": _STROKE_WIDTH_FIELD,
@@ -334,13 +334,13 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "category": "edit",
         "stored_object_type": "rect",
         "description": "Edit a rectangle.",
-        "selector": _selector_spec(allow_label_only_note=_EDIT_SELECTOR_NOTE),
+        "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x": _field("number"),
             "y": _field("number"),
             "width": _field("positive-number"),
             "height": _field("positive-number"),
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "fill": _FILL_FIELD,
@@ -352,13 +352,13 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "category": "edit",
         "stored_object_type": "ellipse",
         "description": "Edit an ellipse.",
-        "selector": _selector_spec(allow_label_only_note=_EDIT_SELECTOR_NOTE),
+        "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x": _field("number"),
             "y": _field("number"),
             "width": _field("positive-number"),
             "height": _field("positive-number"),
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "fill": _FILL_FIELD,
@@ -370,12 +370,12 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "category": "edit",
         "stored_object_type": "ellipse",
         "description": "Edit a circle convenience alias stored as an ellipse.",
-        "selector": _selector_spec(allow_label_only_note=_EDIT_SELECTOR_NOTE),
+        "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x": _field("number", description="Top-left x of the circle bounds."),
             "y": _field("number", description="Top-left y of the circle bounds."),
             "radius": _field("positive-number"),
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "fill": _FILL_FIELD,
@@ -387,10 +387,10 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "category": "edit",
         "stored_object_type": "polyline",
         "description": "Edit a polyline.",
-        "selector": _selector_spec(allow_label_only_note=_EDIT_SELECTOR_NOTE),
+        "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "points": _POINTS_FIELD,
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "stroke_width": _STROKE_WIDTH_FIELD,
@@ -401,10 +401,10 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "category": "edit",
         "stored_object_type": "polygon",
         "description": "Edit a polygon.",
-        "selector": _selector_spec(allow_label_only_note=_EDIT_SELECTOR_NOTE),
+        "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "points": _POINTS_FIELD,
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
             "fill": _FILL_FIELD,
@@ -416,7 +416,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "category": "edit",
         "stored_object_type": "text",
         "description": "Edit a text object.",
-        "selector": _selector_spec(allow_label_only_note=_EDIT_SELECTOR_NOTE),
+        "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x": _field("number"),
             "y": _field("number"),
@@ -424,7 +424,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
             "height": _field("positive-number"),
             "text": _field("string"),
             "size": _TEXT_SIZE_FIELD,
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "fill": _field("color|null"),
             "align": _TEXT_ALIGN_FIELD,
@@ -440,22 +440,22 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "category": "edit",
         "stored_object_type": "image",
         "description": "Edit image placement.",
-        "selector": _selector_spec(allow_label_only_note=_EDIT_SELECTOR_NOTE),
+        "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x": _field("number"),
             "y": _field("number"),
             "width": _field("positive-number"),
             "height": _field("positive-number"),
-            "label": _LABEL_FIELD,
+            "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
         },
         "example": _example("edit.image", {"id": "obj_000001", "width": 80}),
     },
     "delete": {
         "category": "mutation",
-        "description": "Delete one object by id or unique live label.",
-        "selector": _selector_spec(allow_label_only_note=_DELETE_SELECTOR_NOTE),
-        "example": _example("delete", {"label": "box"}),
+        "description": "Delete one object by id or unique live tag.",
+        "selector": _selector_spec(allow_tag_only_note=_DELETE_SELECTOR_NOTE),
+        "example": _example("delete", {"tag": "box"}),
     },
     "undo": {
         "category": "mutation",
@@ -482,8 +482,6 @@ _MANUAL_SUGGESTIONS = {
     "edit.star": "edit.polygon",
     "draw.connector": "draw.arrow",
     "edit.connector": "edit.arrow",
-    "draw.label": "draw.text",
-    "edit.label": "edit.text",
 }
 
 

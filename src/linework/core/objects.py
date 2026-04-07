@@ -62,8 +62,8 @@ def apply_edit(
     object_type = require_string(existing.get("type"), field="type")
     current = dict(existing)
 
-    if "label" in payload:
-        current["label"] = require_optional_string(payload.get("label"), field="label")
+    if "tag" in payload:
+        current["tag"] = require_optional_string(payload.get("tag"), field="tag")
     if "visible" in payload:
         current["visible"] = require_bool(payload.get("visible"), field="visible")
 
@@ -281,9 +281,9 @@ def normalize_common_fields(
         "type": object_type,
         "visible": require_bool(payload.get("visible", True), field="visible"),
     }
-    label = require_optional_string(payload.get("label"), field="label")
-    if label is not None:
-        object_data["label"] = label
+    tag = require_optional_string(payload.get("tag"), field="tag")
+    if tag is not None:
+        object_data["tag"] = tag
     return object_data
 
 

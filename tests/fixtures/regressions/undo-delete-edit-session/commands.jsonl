@@ -1,4 +1,4 @@
-{"schema_version": 1, "op_id": "op_000001", "timestamp": "2026-04-03T23:21:56Z", "op": "draw.rect", "payload": {"x": 14, "y": 18, "width": 70, "height": 44, "fill": "#CCCCCC", "label": "box", "id": "obj_000001"}}
+{"schema_version": 1, "op_id": "op_000001", "timestamp": "2026-04-03T23:21:56Z", "op": "draw.rect", "payload": {"x": 14, "y": 18, "width": 70, "height": 44, "fill": "#CCCCCC", "tag": "box", "id": "obj_000001"}}
 {"schema_version": 1, "op_id": "op_000002", "timestamp": "2026-04-03T23:21:56Z", "op": "draw.text", "payload": {"x": 22, "y": 28, "width": 70, "height": 24, "text": "alpha", "size": 20, "fill": "#222222", "id": "obj_000002"}}
 {"schema_version": 1, "op_id": "op_000003", "timestamp": "2026-04-03T23:21:56Z", "op": "edit.rect", "payload": {"id": "obj_000001", "x": 28, "fill": "#FFCC00"}}
 {"schema_version": 1, "op_id": "op_000004", "timestamp": "2026-04-03T23:21:56Z", "op": "delete", "payload": {"id": "obj_000002"}}

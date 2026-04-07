@@ -16,6 +16,17 @@ class SessionLockedError(RuntimeError):
     """Raised when a session writer lock is already held."""
 
 
+def _locked_session_message(session_path: Path, *, pid: int | None = None) -> str:
+    """Return a user-facing single-writer guidance message."""
+    owner = f" by another writer (pid {pid})" if pid is not None else " by another writer"
+    return (
+        f"session is locked{owner}: {session_path}. "
+        "Only one writer may modify a session at a time. "
+        "Wait for the other command to finish, then reuse the same session path. "
+        "For multiple changes, batch them in one `linework run --session PATH` call."
+    )
+
+
 def lock_path_for_session(session_path: Path) -> Path:
     """Return the machine-local lock path for a session."""
     session_key = str(session_path.expanduser().resolve()).encode("utf-8")
@@ -70,7 +81,7 @@ def _try_reclaim_stale_lock(lock_path: Path, session_path: Path) -> None:
         return
 
     if _is_pid_alive(pid):
-        raise SessionLockedError(f"session is locked by pid {pid}: {session_path}")
+        raise SessionLockedError(_locked_session_message(session_path, pid=pid))
 
     try:
         lock_path.unlink()
@@ -100,7 +111,7 @@ def writer_lock(session_path: Path) -> Iterator[Path]:
                 0o600,
             )
         except FileExistsError as error:
-            raise SessionLockedError(f"session is locked: {session_path}") from error
+            raise SessionLockedError(_locked_session_message(session_path)) from error
 
     try:
         with os.fdopen(file_descriptor, "w", encoding="utf-8") as handle:

@@ -358,7 +358,7 @@ def test_draw_text_accepts_box_layout(tmp_path: Path) -> None:
     assert scene["objects"][0]["padding"] == 6.0
 
 
-def test_edit_rect_by_label_updates_unique_object(tmp_path: Path) -> None:
+def test_edit_rect_by_tag_updates_unique_object(tmp_path: Path) -> None:
     session_path, env = create_cli_session(tmp_path)
 
     draw_result = run_cli(
@@ -374,7 +374,7 @@ def test_edit_rect_by_label_updates_unique_object(tmp_path: Path) -> None:
         "50",
         "--height",
         "30",
-        "--label",
+        "--tag",
         "box",
         env=env,
     )
@@ -385,7 +385,7 @@ def test_edit_rect_by_label_updates_unique_object(tmp_path: Path) -> None:
         "rect",
         "--session",
         str(session_path),
-        "--label",
+        "--tag",
         "box",
         "--fill",
         "#00FF00",
@@ -396,10 +396,10 @@ def test_edit_rect_by_label_updates_unique_object(tmp_path: Path) -> None:
     assert result.returncode == 0
     scene = read_scene(session_path)
     assert scene["objects"][0]["fill"] == "#00FF00"
-    assert scene["objects"][0]["label"] == "box"
+    assert scene["objects"][0]["tag"] == "box"
 
 
-def test_edit_with_id_can_still_change_label(tmp_path: Path) -> None:
+def test_edit_with_id_can_still_change_tag(tmp_path: Path) -> None:
     session_path, env = create_cli_session(tmp_path)
 
     draw_result = run_cli(
@@ -415,7 +415,7 @@ def test_edit_with_id_can_still_change_label(tmp_path: Path) -> None:
         "50",
         "--height",
         "30",
-        "--label",
+        "--tag",
         "box",
         env=env,
     )
@@ -428,7 +428,7 @@ def test_edit_with_id_can_still_change_label(tmp_path: Path) -> None:
         str(session_path),
         "--id",
         "obj_000001",
-        "--label",
+        "--tag",
         "renamed-box",
         "--json",
         env=env,
@@ -436,7 +436,7 @@ def test_edit_with_id_can_still_change_label(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     scene = read_scene(session_path)
-    assert scene["objects"][0]["label"] == "renamed-box"
+    assert scene["objects"][0]["tag"] == "renamed-box"
 
 
 def test_edit_requires_at_least_one_field(tmp_path: Path) -> None:
@@ -460,7 +460,7 @@ def test_edit_requires_at_least_one_field(tmp_path: Path) -> None:
     assert result.stderr == ""
 
 
-def test_edit_requires_id_or_label_selector(tmp_path: Path) -> None:
+def test_edit_requires_id_or_tag_selector(tmp_path: Path) -> None:
     session_path, env = create_cli_session(tmp_path)
 
     result = run_cli(
@@ -477,11 +477,11 @@ def test_edit_requires_id_or_label_selector(tmp_path: Path) -> None:
     assert result.returncode == 1
     payload = json.loads(result.stdout)
     assert set(payload) == {"error"}
-    assert payload["error"] == "id or label must be provided for edit"
+    assert payload["error"] == "id or tag must be provided for edit"
     assert result.stderr == ""
 
 
-def test_edit_by_label_rejects_ambiguous_matches(tmp_path: Path) -> None:
+def test_edit_by_tag_rejects_ambiguous_matches(tmp_path: Path) -> None:
     session_path, env = create_cli_session(tmp_path)
 
     for x in ("10", "80"):
@@ -498,7 +498,7 @@ def test_edit_by_label_rejects_ambiguous_matches(tmp_path: Path) -> None:
             "50",
             "--height",
             "30",
-            "--label",
+            "--tag",
             "box",
             env=env,
         )
@@ -509,7 +509,7 @@ def test_edit_by_label_rejects_ambiguous_matches(tmp_path: Path) -> None:
         "rect",
         "--session",
         str(session_path),
-        "--label",
+        "--tag",
         "box",
         "--fill",
         "#00FF00",
@@ -520,7 +520,7 @@ def test_edit_by_label_rejects_ambiguous_matches(tmp_path: Path) -> None:
     assert result.returncode == 1
     payload = json.loads(result.stdout)
     assert set(payload) == {"error"}
-    assert payload["error"] == "label is ambiguous: box"
+    assert payload["error"] == "tag is ambiguous: box"
     assert result.stderr == ""
 
 
@@ -563,7 +563,7 @@ def test_delete_human_readable_output(tmp_path: Path) -> None:
     assert read_scene(session_path)["objects"] == []
 
 
-def test_delete_by_label_human_readable_output(tmp_path: Path) -> None:
+def test_delete_by_tag_human_readable_output(tmp_path: Path) -> None:
     session_path, env = create_cli_session(tmp_path)
 
     draw_result = run_cli(
@@ -581,7 +581,7 @@ def test_delete_by_label_human_readable_output(tmp_path: Path) -> None:
         "30",
         "--text",
         "hello",
-        "--label",
+        "--tag",
         "greeting",
         env=env,
     )
@@ -591,7 +591,7 @@ def test_delete_by_label_human_readable_output(tmp_path: Path) -> None:
         "delete",
         "--session",
         str(session_path),
-        "--label",
+        "--tag",
         "greeting",
         env=env,
     )
@@ -601,7 +601,7 @@ def test_delete_by_label_human_readable_output(tmp_path: Path) -> None:
     assert read_scene(session_path)["objects"] == []
 
 
-def test_delete_requires_id_or_label_selector(tmp_path: Path) -> None:
+def test_delete_requires_id_or_tag_selector(tmp_path: Path) -> None:
     session_path, env = create_cli_session(tmp_path)
 
     result = run_cli(
@@ -615,7 +615,7 @@ def test_delete_requires_id_or_label_selector(tmp_path: Path) -> None:
     assert result.returncode == 1
     payload = json.loads(result.stdout)
     assert set(payload) == {"error"}
-    assert payload["error"] == "id or label must be provided for delete"
+    assert payload["error"] == "id or tag must be provided for delete"
     assert result.stderr == ""
 
 
@@ -834,7 +834,7 @@ def test_export_succeeds_after_original_image_source_is_removed(tmp_path: Path) 
         "export",
         "--session",
         str(session_path),
-        "--out",
+        "--output",
         str(out_path),
         "--json",
         env=env,
@@ -874,7 +874,7 @@ def test_export_fails_when_session_image_asset_is_missing(tmp_path: Path) -> Non
         "export",
         "--session",
         str(session_path),
-        "--out",
+        "--output",
         str(tmp_path / "broken-export.png"),
         "--json",
         env=env,

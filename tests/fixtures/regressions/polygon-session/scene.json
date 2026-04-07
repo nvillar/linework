@@ -11,7 +11,7 @@
       "id": "obj_000001",
       "type": "polygon",
       "visible": true,
-      "label": "triangle",
+      "tag": "triangle",
       "points": [
         [
           20.0,

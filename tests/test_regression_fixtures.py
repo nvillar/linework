@@ -67,5 +67,5 @@ def test_regression_fixture_replay_matches_expected_scene_and_png(
     ).read_bytes()
 
     exported_path = tmp_path / f"{fixture_path.name}.png"
-    export_session(session_path, out=str(exported_path))
+    export_session(session_path, output=str(exported_path))
     assert exported_path.read_bytes() == (fixture_path / "render" / "latest.png").read_bytes()

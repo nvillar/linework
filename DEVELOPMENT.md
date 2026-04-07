@@ -20,6 +20,8 @@ development rules, workflow processes, and validation requirements.
 9. Polish and test coverage
 10. Agent UX improvements
 11. Alpha compositing and transparency correctness
+12. Box-based text layout
+13. Agent usability cleanup
 
 Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interface (`run`), scene reader (`inspect`), and export are the primary agent workflow. The individual draw/edit/delete/undo subcommands are convenience wrappers and follow after.
 
@@ -53,7 +55,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - `linework run` (JSONL batch from stdin and `--file`)
 - `linework run --json` with per-operation results
 - `linework inspect` and `linework inspect --json`
-- `linework export --out PATH`
+- `linework export --output PATH`
 - `--json` error output (structured JSON on stdout, exit non-zero)
 - bootstrap text rewrite: teach JSONL workflow as the primary interface
 - tests for all new commands
@@ -100,7 +102,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 
 - default canvas now `800x800`
 - `polygon` primitive for filled closed shapes
-- label-based selection for `delete` and `edit.*` when IDs are omitted
+- tag-based selection for `delete` and `edit.*` when IDs are omitted
 - batch-aware undo (`linework run` undoes as one action)
 - `linework new` watcher startup behavior refinements
 - refactored `apply_batch()` to remove duplicated scene-derivation branches
@@ -113,7 +115,7 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - tiered `linework schema` discovery: compact overview, `linework schema OP` one-op detail, and `linework schema --json` full manifest
 - consistent discovery guidance across no-arg bootstrap, `--help`, and `linework schema`
 - `draw.circle` / `edit.circle` convenience aliases stored as ellipses
-- `linework run --out` one-shot temporary-session export flow
+- `linework run --output` one-shot temporary-session export flow
 - `arrow` primitive with configurable `arrowhead` and optional `arrow_size`
 - initial text alignment and wrapping support (later redesigned in Milestone 12)
 - new agent UX regression fixture plus expanded CLI/render coverage
@@ -134,9 +136,19 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - expanded CLI/render/regression coverage for boxed placement and multiline layout
 - refreshed bootstrap, schema/help output, SPEC, and roadmap text to teach the new model
 
+#### Milestone 13: Agent usability cleanup (complete)
+
+- renamed hidden selector metadata from `label` to `tag` across CLI, JSONL, inspect output, schema, docs, tests, and stored scene objects
+- removed the ambiguous `draw.label` / `edit.label` aliases
+- replaced `--out` with `--output` for `linework run` and `linework export`
+- rewrote locked/existing-session failures to steer agents toward reusing one session or batching changes
+- updated bootstrap/help/new-session output to teach the persistent single-session workflow explicitly
+- allowed `linework new --session PATH` to initialize inside a pre-created empty directory
+- quoted shell-facing color examples and added shell guidance around `#RRGGBB[AA]` values
+
 ### Current implementation status
 
-Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12.
+Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13.
 
 Current user-facing command surface:
 
@@ -160,12 +172,12 @@ Internal engine capabilities:
 - JSONL batch execution with single-render-at-end semantics
 - batch-aware undo grouping for `linework run`
 - watched session seeding via `linework new --file` / `linework new --stdin`
-- one-shot batch export via `linework run --out` with optional temporary width / height / background overrides
+- one-shot batch export via `linework run --output` with optional temporary width / height / background overrides
 - scene replay from command history
 - PNG rendering for all supported primitives with per-object alpha compositing for renderer-drawn objects
 - arrow rendering with configurable arrowhead placement and size
 - boxed text layout with default centered placement, optional box-internal alignment, padding, and width-based wrapping
-- label-based selection for edit/delete with disambiguation on collisions
+- tag-based selection for edit/delete with disambiguation on collisions
 - bundled Noto Sans default font for deterministic text rendering
 - session-local asset import/copy for image convenience commands
 - read-only watcher window with lazy `tkinter` loading and polling refresh
@@ -181,13 +193,13 @@ Implementation notes:
 - `linework new` now defaults to an `800x800` canvas
 - no-arg `linework`, `linework --help`, and `linework schema` now give consistent discovery advice: quick overview first, one-operation detail as needed, and `linework schema --json` as the full reference
 - `draw.circle` / `edit.circle` accept `x`, `y`, and `radius`, but the stored scene object type remains `ellipse`
-- workflow guidance now consistently recommends `linework new` for persistent sessions, `linework watch` for live display, and `linework run --out` for disposable headless exports
-- `linework new` output always includes a `watch_command` hint; `--file` / `--stdin` seed the session from an initial batch
-- `linework run --out` can export either an existing session or a temporary throwaway batch result, and `--width`, `--height`, and `--background` customize the temporary canvas when `--session` is omitted
+- workflow guidance now consistently recommends creating one persistent session with `linework new`, reusing that same `--session PATH` for iterative changes, using `linework watch` for live display, and using `linework run --output` for disposable headless exports
+- `linework new` output always includes exact next-step hints for reusing the created session (`watch_command`, `run_command`, `inspect_command`, `export_command`); `--file` / `--stdin` seed the session from an initial batch
+- `linework run --output` can export either an existing session or a temporary throwaway batch result, and `--width`, `--height`, and `--background` customize the temporary canvas when `--session` is omitted
 - `draw.arrow` / `edit.arrow` support `arrowhead` (`end`, `start`, `both`, `none`) and optional pixel-sized `arrow_size`
 - text objects now use explicit layout boxes with `align`, `valign`, and optional `padding`; wrapping uses the padded inner box width
 - renderer-drawn objects now render through per-object RGBA layers and are alpha-composited in creation order; image objects continue to use explicit `alpha_composite`
-- `linework edit` can select by label when `--id` is omitted; use `--id` when relabeling
+- `linework edit` can select by tag when `--id` is omitted; use `--id` when retagging
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 - `linework watch` now preserves unavailable-environment reasons and, on Windows, rejects detached/noninteractive GUI contexts before reporting success
 - watcher startup handshake confirms the window is visible on screen (via `winfo_viewable`) before signalling "ready" to the parent; if the window never becomes visible, the child reports failure and the parent relays a clear error

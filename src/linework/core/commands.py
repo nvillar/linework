@@ -162,46 +162,46 @@ def _resolve_target_object_id(
     session_path: Path,
     for_delete: bool,
 ) -> str:
-    """Resolve a target object by id or unique live label."""
+    """Resolve a target object by id or unique live tag."""
     object_id = normalized_payload.get("id")
     if object_id is not None and not isinstance(object_id, str):
         raise CommandValidationError("id must be a string")
     if isinstance(object_id, str):
         return object_id
 
-    selector_label = normalized_payload.get("label")
-    if selector_label is None:
+    selector_tag = normalized_payload.get("tag")
+    if selector_tag is None:
         if for_delete:
-            raise CommandValidationError("id or label must be provided for delete")
-        raise CommandValidationError("id or label must be provided for edit commands")
-    if not isinstance(selector_label, str):
-        raise CommandValidationError("label must be a string")
+            raise CommandValidationError("id or tag must be provided for delete")
+        raise CommandValidationError("id or tag must be provided for edit commands")
+    if not isinstance(selector_tag, str):
+        raise CommandValidationError("tag must be a string")
 
-    resolved_id = _resolve_unique_object_id_by_label(
+    resolved_id = _resolve_unique_object_id_by_tag(
         existing_commands=existing_commands,
         session_path=session_path,
-        label=selector_label,
+        tag=selector_tag,
     )
     normalized_payload["id"] = resolved_id
-    normalized_payload.pop("label", None)
+    normalized_payload.pop("tag", None)
     return resolved_id
 
 
-def _resolve_unique_object_id_by_label(
+def _resolve_unique_object_id_by_tag(
     *,
     existing_commands: list[CommandRecord],
     session_path: Path,
-    label: str,
+    tag: str,
 ) -> str:
-    """Resolve one live object id from a unique label."""
+    """Resolve one live object id from a unique tag."""
     live = _resolve_live_objects(existing_commands, session_path=session_path)
     matches = [
-        object_id for object_id, object_data in live.items() if object_data.get("label") == label
+        object_id for object_id, object_data in live.items() if object_data.get("tag") == tag
     ]
     if not matches:
-        raise ObjectNotFoundError(f"object not found for label: {label}")
+        raise ObjectNotFoundError(f"object not found for tag: {tag}")
     if len(matches) > 1:
-        raise CommandValidationError(f"label is ambiguous: {label}")
+        raise CommandValidationError(f"tag is ambiguous: {tag}")
     return matches[0]
 
 

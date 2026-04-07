@@ -101,7 +101,8 @@ def test_new_help_advertises_watch_command() -> None:
 
     assert result.returncode == 0
     assert "watch_command" in result.stdout
-    assert "Plaintext output prints a Watch:" in result.stdout
+    assert "run_command" in result.stdout
+    assert "reuse the printed session path" in result.stdout
     assert "--json" in result.stdout
     assert "800x800" in result.stdout
     assert result.stderr == ""
@@ -141,9 +142,13 @@ def test_schema_command_outputs_compact_overview() -> None:
     assert "linework schema draw.arrow" in result.stdout
     assert "linework schema --json" in result.stdout
     assert "full manifest" in result.stdout
-    assert "draw x1, y1, x2, y2 | optional label, visible, stroke, stroke_width" in result.stdout
+    assert "draw x1, y1, x2, y2 | optional tag, visible, stroke, stroke_width" in result.stdout
     assert "arrowhead: end, start, both, none (default: end)" in result.stdout
-    assert "colors: #RRGGBB or #RRGGBBAA (alpha-composited in stacking order)" in result.stdout
+    assert (
+        "colors: #RRGGBB or #RRGGBBAA (alpha-composited in stacking order; quote in shell commands)"
+        in result.stdout
+    )
+    assert "hidden selector metadata" in result.stdout
     assert (
         "`edit.image` changes placement/size only; `asset_path` is fixed after creation"
         in result.stdout
@@ -239,6 +244,7 @@ def test_new_uses_explicit_session_path(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert f"Session path: {session_path}" in result.stdout
+    assert f"linework run --session {session_path} --json < ops.jsonl" in result.stdout
     assert result.stderr == ""
 
     session_json = json.loads((session_path / "session.json").read_text(encoding="utf-8"))
@@ -359,6 +365,7 @@ def test_new_normalizes_slug_from_name(tmp_path: Path) -> None:
 def test_new_rejects_existing_session_path(tmp_path: Path) -> None:
     session_path = tmp_path / "duplicate-session"
     session_path.mkdir()
+    (session_path / "keep.txt").write_text("existing", encoding="utf-8")
 
     result = run_cli(
         "new",
@@ -370,6 +377,30 @@ def test_new_rejects_existing_session_path(tmp_path: Path) -> None:
     assert result.returncode == 1
     assert result.stdout == ""
     assert "session already exists" in result.stderr
+    assert "Reuse this same session" in result.stderr
+
+
+def test_new_allows_precreated_empty_session_directory(tmp_path: Path) -> None:
+    session_path = tmp_path / "prepared-session"
+    session_path.mkdir()
+
+    result = run_cli(
+        "new",
+        "--session",
+        str(session_path),
+        "--json",
+        env={"LINEWORK_HOME": str(tmp_path / "linework-home")},
+    )
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+
+    payload = json.loads(result.stdout)
+    assert payload["session_path"] == str(session_path.resolve())
+    assert (session_path / "session.json").is_file()
+    assert (session_path / "scene.json").is_file()
+    assert (session_path / "commands.jsonl").is_file()
+    assert (session_path / "render" / "latest.png").is_file()
 
 
 def test_new_rejects_invalid_background(tmp_path: Path) -> None:
@@ -438,6 +469,9 @@ def test_new_json_includes_watch_command(
     payload = json.loads(captured.out)
     assert payload["session_path"] == str(session_path)
     assert payload["watch_command"] == f"linework watch --session {session_path}"
+    assert payload["run_command"] == f"linework run --session {session_path}"
+    assert payload["inspect_command"] == f"linework inspect --session {session_path}"
+    assert payload["export_command"] == f"linework export --session {session_path} --output out.png"
     assert captured.err == ""
 
 
@@ -453,6 +487,7 @@ def test_new_plaintext_includes_watch_command(
 
     assert exit_code == 0
     assert f"Watch: linework watch --session {session_path}" in captured.out
+    assert "Reuse this session path for iterative changes:" in captured.out
     assert captured.err == ""
 
 

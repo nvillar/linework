@@ -11,7 +11,7 @@
       "id": "obj_000001",
       "type": "rect",
       "visible": true,
-      "label": "box",
+      "tag": "box",
       "x": 28.0,
       "y": 18.0,
       "width": 70.0,

@@ -395,7 +395,7 @@ def test_draw_arrow_renders_with_requested_head_size(
         assert rendered.getpixel((148, 84)) == (0, 0, 255, 255)
 
 
-def test_edit_and_delete_support_unique_label_selection(
+def test_edit_and_delete_support_unique_tag_selection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from linework import config
@@ -406,22 +406,22 @@ def test_edit_and_delete_support_unique_label_selection(
     apply_mutation(
         session_path,
         op="draw.rect",
-        payload={"x": 10, "y": 10, "width": 50, "height": 40, "label": "box"},
+        payload={"x": 10, "y": 10, "width": 50, "height": 40, "tag": "box"},
     )
     apply_mutation(
         session_path,
         op="edit.rect",
-        payload={"label": "box", "fill": "#00FF00"},
+        payload={"tag": "box", "fill": "#00FF00"},
     )
 
     scene = read_scene_snapshot(session_path)
     assert scene.objects[0]["fill"] == "#00FF00"
 
-    apply_mutation(session_path, op="delete", payload={"label": "box"})
+    apply_mutation(session_path, op="delete", payload={"tag": "box"})
     assert read_scene_snapshot(session_path).objects == []
 
 
-def test_label_selection_rejects_ambiguous_matches(
+def test_tag_selection_rejects_ambiguous_matches(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from linework import config
@@ -433,16 +433,16 @@ def test_label_selection_rejects_ambiguous_matches(
     apply_mutation(
         session_path,
         op="draw.rect",
-        payload={"x": 10, "y": 10, "width": 50, "height": 40, "label": "box"},
+        payload={"x": 10, "y": 10, "width": 50, "height": 40, "tag": "box"},
     )
     apply_mutation(
         session_path,
         op="draw.rect",
-        payload={"x": 70, "y": 10, "width": 50, "height": 40, "label": "box"},
+        payload={"x": 70, "y": 10, "width": 50, "height": 40, "tag": "box"},
     )
 
-    with pytest.raises(CommandValidationError, match="label is ambiguous: box"):
-        apply_mutation(session_path, op="delete", payload={"label": "box"})
+    with pytest.raises(CommandValidationError, match="tag is ambiguous: box"):
+        apply_mutation(session_path, op="delete", payload={"tag": "box"})
 
 
 def test_undo_after_batch_removes_the_whole_batch(

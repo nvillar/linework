@@ -4,7 +4,7 @@
 shapes, place text, build diagrams, and export PNGs from the command line. 
 
 `linework` keeps the underlying drawing objects, allowing an agent to
-tweak things (*make the red box wider, change the background, relabel
+tweak things (*make the red box wider, change the background, retag
 that arrow*), editing the shapes in place instead of regenerating the image 
 from scratch.
 
@@ -77,8 +77,10 @@ to use it to avoid having to learn it every time.
 Every drawing lives in a portable **session directory** when you want to keep
 iterating. The primary interface is **JSONL batch mode**, designed for automated
 agent loops. Use `linework new` for persistent sessions, `linework watch` to
-open a live display, and `linework run --out` for disposable headless exports.
-Here are the main patterns behind the scenes:
+open a live display, and `linework run --output` for disposable headless exports.
+For iterative work, create one session and keep reusing that same `--session PATH`
+instead of creating a fresh session for every change. Here are the main patterns
+behind the scenes:
 
 ```bash
 # Create a session
@@ -92,7 +94,7 @@ linework new --name demo --file ops.jsonl
 
 # Draw via JSONL batch (in another terminal)
 cat <<'EOF' | linework run --session PATH --json
-{"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","label":"box"}}
+{"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","tag":"box"}}
 {"op":"draw.polygon","payload":{"points":[[300,50],[400,10],[400,90]],"fill":"#FF6666"}}
 {"op":"draw.text","payload":{"x":50,"y":50,"width":200,"height":100,"text":"Hello","size":20}}
 EOF
@@ -101,10 +103,10 @@ EOF
 linework inspect --session PATH --json
 
 # Export a PNG
-linework export --session PATH --out diagram.png
+linework export --session PATH --output diagram.png
 
 # Or do a disposable one-shot export with a temporary canvas
-linework run --file ops.jsonl --out diagram.png --width 1200 --height 800 --background "#111827"
+linework run --file ops.jsonl --output diagram.png --width 1200 --height 800 --background "#111827"
 ```
 
 The **watcher window** runs as its own process, so it stays open while the agent works across multiple commands.

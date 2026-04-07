@@ -146,7 +146,7 @@ class TestApplyBatch:
                     "y": 2 * index,
                     "width": 10,
                     "height": 8,
-                    "label": f"box-{index}",
+                    "tag": f"box-{index}",
                 },
             }
             for index in range(40)
@@ -159,7 +159,7 @@ class TestApplyBatch:
         assert len(result.results) == 40
         assert result.scene_object_count == 40
 
-    def test_batch_supports_label_based_edit_and_delete(
+    def test_batch_supports_tag_based_edit_and_delete(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         session_path = make_session(tmp_path, monkeypatch)
@@ -173,7 +173,7 @@ class TestApplyBatch:
                         "y": 10,
                         "width": 50,
                         "height": 40,
-                        "label": "box",
+                        "tag": "box",
                     },
                 },
             ],
@@ -184,7 +184,7 @@ class TestApplyBatch:
             operations=[
                 {
                     "op": "edit.rect",
-                    "payload": {"label": "box", "fill": "#00FF00"},
+                    "payload": {"tag": "box", "fill": "#00FF00"},
                 },
             ],
         )
@@ -196,7 +196,7 @@ class TestApplyBatch:
             operations=[
                 {
                     "op": "delete",
-                    "payload": {"label": "box"},
+                    "payload": {"tag": "box"},
                 },
             ],
         )
@@ -284,7 +284,7 @@ class TestInspectSession:
                         "y": 5,
                         "width": 20,
                         "height": 10,
-                        "label": "box",
+                        "tag": "box",
                     },
                 },
             ],
@@ -292,7 +292,7 @@ class TestInspectSession:
         result = inspect_session(session_path)
         assert result.object_count == 1
         assert result.objects[0]["type"] == "rect"
-        assert result.objects[0]["label"] == "box"
+        assert result.objects[0]["tag"] == "box"
 
 
 # ---------------------------------------------------------------------------
@@ -304,7 +304,7 @@ class TestExportSession:
     def test_export_copies_render(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         session_path = make_session(tmp_path, monkeypatch)
         out = tmp_path / "output" / "exported.png"
-        result_path = export_session(session_path, out=str(out))
+        result_path = export_session(session_path, output=str(out))
         assert Path(result_path).is_file()
         with Image.open(result_path) as img:
             assert img.size == (200, 160)
@@ -376,7 +376,7 @@ class TestRunCLI:
         out_path = tmp_path / "one-shot.png"
         result = run_cli(
             "run",
-            "--out",
+            "--output",
             str(out_path),
             "--json",
             env={"LINEWORK_HOME": str(linework_home)},
@@ -398,7 +398,7 @@ class TestRunCLI:
         out_path = tmp_path / "one-shot-background.png"
         result = run_cli(
             "run",
-            "--out",
+            "--output",
             str(out_path),
             "--width",
             "320",
@@ -430,7 +430,7 @@ class TestRunCLI:
 
         assert result.returncode == 1
         payload = json.loads(result.stdout)
-        assert payload == {"error": "either --session or --out must be provided"}
+        assert payload == {"error": "either --session or --output must be provided"}
 
     def test_run_from_file(self, tmp_path: Path) -> None:
         linework_home = tmp_path / "linework-home"
@@ -542,7 +542,7 @@ class TestExportCLI:
             "export",
             "--session",
             str(session_path),
-            "--out",
+            "--output",
             str(out_path),
             "--json",
             env={"LINEWORK_HOME": str(linework_home)},
