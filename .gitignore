@@ -10,4 +10,5 @@ dist/
 build/
 *.egg-info/
 src/linework/_version.py
+.DS_Store
 %TEMP%/
