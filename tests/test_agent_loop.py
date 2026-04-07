@@ -49,7 +49,7 @@ def make_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# linework run (API level)
+# batch seeding (API level)
 # ---------------------------------------------------------------------------
 
 

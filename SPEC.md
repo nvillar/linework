@@ -488,7 +488,7 @@ Behavior:
 - `--file PATH` or `--stdin` applies an initial JSONL batch immediately after session creation.
 - Print the session path and short session ID.
 - Render the initial blank PNG immediately.
-- Output always includes exact next-step hints for reusing the created session. In JSON mode this includes `watch_command`, `run_command`, `inspect_command`, `export_command`, and `reuse_session_hint`; in plaintext mode the same guidance is printed as follow-up lines.
+- Output always includes exact next-step hints for reusing the created session. In JSON mode this includes `watch_command`, `inspect_command`, `export_command`, and `reuse_session_hint`; when many local sessions exist it may also include `cleanup_hint`. In plaintext mode the same guidance is printed as follow-up lines.
 
 Required semantics:
 
