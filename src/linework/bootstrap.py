@@ -123,8 +123,12 @@ Selection:
   - `tag` is hidden selector metadata, not visible diagram text.
   - Use /-separated tag prefixes (e.g. house/wall, house/roof) to group
     related objects for filtering and bulk operations.
-  - `edit` and `delete` accept `--id`, and `delete` also accepts a unique tag.
-  - JSONL `delete` accepts `tag` instead of `id`.
+  - `edit` accepts `--id`; omitting it makes `--tag` act as the selector, and
+    the CLI convenience also supports `--tag-prefix PREFIX` for bulk edits.
+  - `delete` accepts `--id`, a unique live `--tag`, or `--tag-prefix PREFIX`
+    for bulk deletes.
+  - JSONL `delete` accepts `tag` instead of `id`; bulk `tag-prefix` selection is
+    a CLI convenience.
   - For `edit`, omitting `id` makes `tag` act as the selector, so use `id` when
     you need to retag an object.
 
@@ -137,9 +141,9 @@ Commands:
   linework watch        Open a read-only watcher window
   linework draw         Draw a single object (line, arrow, rect, ellipse,
                         circle, polyline, polygon, text, image)
-  linework edit         Edit a single object (line, arrow, rect, ellipse,
-                        circle, polyline, polygon, text, image)
-  linework delete       Delete a single object (convenience)
+  linework edit         Edit one object, or bulk-edit by tag prefix (line,
+                        arrow, rect, ellipse, circle, polyline, polygon, text, image)
+  linework delete       Delete one object, or bulk-delete by tag prefix
   linework undo         Undo last operation (convenience)
 
 Mutation commands accept --json and --session PATH.

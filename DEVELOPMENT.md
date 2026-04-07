@@ -166,9 +166,10 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 #### Milestone 16: Bulk edit and inspect summary (complete)
 
 - bulk edit by tag prefix (`edit TYPE --tag-prefix PREFIX`) applies edits to all matching objects of the specified type; batch-aware undo reverses all as one action
-- tag prefix summary in inspect: `tag_prefixes` field in JSON and `Tag groups:` line in plaintext show per-prefix object counts for scene-at-a-glance understanding
+- tag prefix summary in inspect: `tag_prefixes` in JSON and `Tag groups:` in plaintext show per-prefix totals plus per-type counts for scene-at-a-glance understanding
 - filtered inspect hints now also suggest bulk edit alongside bulk delete
-- bulk edit output clarifies type-scoping behavior
+- bulk edit output clarifies type-scoping behavior with skipped-type reporting
+- `--points` now errors early with a helpful `--point X,Y` hint
 
 ### Current implementation status
 
@@ -226,8 +227,8 @@ Implementation notes:
 - all edit subcommands support relative coordinate offsets (`--dx`/`--dy` and `--dx1`/`--dy1`/`--dx2`/`--dy2` for lines/arrows); mutually exclusive with absolute coordinates on the same axis
 - `linework inspect` supports `--tag-prefix` and `--type` filters; contextual hints appear at >30 objects (suggest filtering) and >50 objects with sparse tags (suggest tagging convention)
 - `linework delete --tag-prefix PREFIX` deletes all matching objects as a batch; undo restores them all as one action
-- `linework edit TYPE --tag-prefix PREFIX` edits all matching objects of the specified type as a batch; undo reverses all as one action; type-scoped (only objects of the subcommand type are affected)
-- `linework inspect` includes `tag_prefixes` summary (per-prefix object counts) in JSON and a `Tag groups:` line in plaintext when tagged objects exist
+- `linework edit TYPE --tag-prefix PREFIX` edits all matching objects of the specified type as a batch; undo reverses all as one action; type-scoped (only objects of the subcommand type are affected); JSON output reports `total_in_prefix` and `skipped_types` when relevant
+- `linework inspect` includes `tag_prefixes` summary (per-prefix totals and per-type counts) in JSON and a `Tag groups:` line in plaintext when tagged objects exist
 - tag prefixes use `/`-separated conventions (e.g. `house/wall`) for grouping; taught in bootstrap, schema, and CLI help
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 - `linework watch` now preserves unavailable-environment reasons and, on Windows, rejects detached/noninteractive GUI contexts before reporting success
@@ -237,4 +238,4 @@ Implementation notes:
 - `linework --version` checks the remote repo for newer tags via `git ls-remote` (5s timeout, best-effort); shows a platform-aware `uv tool install --no-cache --reinstall-package linework git+...@vX.Y.Z` command if an update is available
 - Windows: `_is_pid_alive` uses Win32 `OpenProcess` API instead of `os.kill(pid, 0)` (which sends `CTRL_C_EVENT` on Windows)
 
-Next milestone: **TBD.** Deferred future directions are canvas resize / fit-to-contents, hierarchical groups with relative coordinate systems, per-type breakdown in tag prefix summary, type-agnostic bulk edit for simple properties, auto-layout, higher-level composites, and themes / reusable styles.
+Next milestone: **TBD.** Deferred future directions are canvas resize / fit-to-contents, hierarchical groups with relative coordinate systems, type-agnostic bulk edit for simple properties, auto-layout, higher-level composites, and themes / reusable styles.

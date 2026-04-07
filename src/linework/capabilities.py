@@ -97,6 +97,14 @@ _ARROW_SIZE_FIELD = _field(
     description="Arrowhead size in pixels. When omitted, defaults to 4× stroke_width.",
 )
 _POINTS_FIELD = _field("points")
+_BULK_EDIT_CLI_NOTE = (
+    " CLI convenience also supports --tag-prefix PREFIX to bulk-edit matching "
+    "objects of this type as one batch."
+)
+_BULK_DELETE_CLI_NOTE = (
+    " CLI convenience also supports --tag-prefix PREFIX to bulk-delete all "
+    "matching objects as one batch."
+)
 
 _DRAW_SELECTOR_NOTE = "Use inspect to discover stable IDs before editing."
 _EDIT_SELECTOR_NOTE = "Must be a unique live tag when id is omitted."
@@ -310,7 +318,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
     "edit.line": {
         "category": "edit",
         "stored_object_type": "line",
-        "description": "Edit a line.",
+        "description": "Edit a line." + _BULK_EDIT_CLI_NOTE,
         "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x1": _field("number"),
@@ -331,7 +339,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
     "edit.arrow": {
         "category": "edit",
         "stored_object_type": "arrow",
-        "description": "Edit an arrow.",
+        "description": "Edit an arrow." + _BULK_EDIT_CLI_NOTE,
         "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x1": _field("number"),
@@ -354,7 +362,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
     "edit.rect": {
         "category": "edit",
         "stored_object_type": "rect",
-        "description": "Edit a rectangle.",
+        "description": "Edit a rectangle." + _BULK_EDIT_CLI_NOTE,
         "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x": _field("number"),
@@ -374,7 +382,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
     "edit.ellipse": {
         "category": "edit",
         "stored_object_type": "ellipse",
-        "description": "Edit an ellipse.",
+        "description": "Edit an ellipse." + _BULK_EDIT_CLI_NOTE,
         "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x": _field("number"),
@@ -394,7 +402,9 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
     "edit.circle": {
         "category": "edit",
         "stored_object_type": "ellipse",
-        "description": "Edit a circle convenience alias stored as an ellipse.",
+        "description": (
+            "Edit a circle convenience alias stored as an ellipse." + _BULK_EDIT_CLI_NOTE
+        ),
         "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x": _field("number", description="Top-left x of the circle bounds."),
@@ -413,7 +423,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
     "edit.polyline": {
         "category": "edit",
         "stored_object_type": "polyline",
-        "description": "Edit a polyline.",
+        "description": "Edit a polyline." + _BULK_EDIT_CLI_NOTE,
         "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "points": _POINTS_FIELD,
@@ -427,7 +437,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
     "edit.polygon": {
         "category": "edit",
         "stored_object_type": "polygon",
-        "description": "Edit a polygon.",
+        "description": "Edit a polygon." + _BULK_EDIT_CLI_NOTE,
         "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "points": _POINTS_FIELD,
@@ -442,7 +452,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
     "edit.text": {
         "category": "edit",
         "stored_object_type": "text",
-        "description": "Edit a text object.",
+        "description": "Edit a text object." + _BULK_EDIT_CLI_NOTE,
         "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x": _field("number"),
@@ -468,7 +478,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
     "edit.image": {
         "category": "edit",
         "stored_object_type": "image",
-        "description": "Edit image placement.",
+        "description": "Edit image placement." + _BULK_EDIT_CLI_NOTE,
         "selector": _selector_spec(allow_tag_only_note=_EDIT_SELECTOR_NOTE),
         "optional": {
             "x": _field("number"),
@@ -484,7 +494,7 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
     },
     "delete": {
         "category": "mutation",
-        "description": "Delete one object by id or unique live tag.",
+        "description": "Delete one object by id or unique live tag." + _BULK_DELETE_CLI_NOTE,
         "selector": _selector_spec(allow_tag_only_note=_DELETE_SELECTOR_NOTE),
         "example": _example("delete", {"tag": "box"}),
     },

@@ -573,7 +573,7 @@ Flags:
 
 When filtered, JSON output includes `total_object_count` alongside the filtered `object_count`. When filtered results contain multiple objects, a `hints` array includes bulk delete and bulk edit suggestions. When an unfiltered inspect returns more than 30 objects, hints suggest using `--tag-prefix` or `--type` to filter. When more than 50 objects exist and fewer than half have tags, hints suggest adopting the `prefix/name` tagging convention.
 
-When tagged objects exist, JSON output includes a `tag_prefixes` field mapping each tag prefix to its object count (e.g. `{"house/": 9, "tree/": 4, "": 3}`), and plaintext output shows a `Tag groups:` summary line. This provides scene-at-a-glance structure without reading individual objects.
+When tagged objects exist, JSON output includes a `tag_prefixes` field mapping each tag prefix to per-type counts (e.g. `{"house/": {"rect": 6, "polygon": 1}, "": {"line": 2}}`), and plaintext output shows a `Tag groups:` summary line with totals and type breakdowns. This provides scene-at-a-glance structure without reading individual objects.
 
 ### 9.6 `linework export`
 
@@ -648,13 +648,15 @@ Edits must not change stacking order.
 
 Bulk edit: `edit TYPE --tag-prefix PREFIX` edits all objects of the specified type
 whose tag starts with the prefix. The operation is type-scoped — only objects
-matching the subcommand type are affected; other types in the prefix are silently
-skipped. Bulk edits are grouped as a batch so undo reverses them all as one action.
+matching the subcommand type are affected. JSON output reports `applied`,
+`total_in_prefix`, and `skipped_types`; plaintext output also summarizes skipped
+non-matching types when relevant. Bulk edits are grouped as a batch so undo
+reverses them all as one action.
 
 ### 9.10 `linework delete`
 
 Convenience command for deleting a single object by stable object ID or unique
-live tag.
+live tag, or deleting a tagged group by prefix.
 
 Behavior:
 
@@ -707,11 +709,13 @@ Edit commands additionally support relative coordinate offsets:
 Edit commands must use the same field names and additionally require:
 
 - `--id OBJ_ID`, or
-- a unique live `tag` selector when `id` is omitted
+- a unique live `tag` selector when `id` is omitted, or
+- `--tag-prefix PREFIX` for convenience-command bulk edits scoped to the subcommand type
 
 When `linework edit` omits `id`, the `tag` field acts as the selector rather
 than a metadata update. Callers must use `id` when they need to change the
-object's tag.
+object's tag. `--tag-prefix` is a convenience-command bulk selector, not a tag
+metadata update.
 
 `linework edit image` may update geometry, tag, visibility, and other common editable fields, but image source replacement is not required in the MVP.
 
@@ -748,6 +752,8 @@ Tags are optional hidden selector metadata. They are not visible rendered text.
 - Tags may be set during create or edit.
 - `delete` may target a unique live tag instead of an ID.
 - `edit.*` may target a unique live tag when `id` is omitted.
+- the convenience `delete` command may target all tags starting with a prefix via `--tag-prefix`
+- the convenience `edit.*` commands may bulk-target tags starting with a prefix via `--tag-prefix`, scoped to the subcommand type
 - If multiple live objects share a tag, tag-based selection must fail and
   require `id` for disambiguation.
 

@@ -141,6 +141,8 @@ def test_schema_command_outputs_compact_overview() -> None:
         in result.stdout
     )
     assert "hidden selector metadata" in result.stdout
+    assert "CLI convenience also supports --tag-prefix bulk edit" in result.stdout
+    assert "CLI convenience also supports --tag-prefix bulk delete" in result.stdout
     assert (
         "`edit.image` changes placement/size only; `asset_path` is fixed after creation"
         in result.stdout
@@ -191,6 +193,22 @@ def test_schema_command_outputs_single_operation_overview() -> None:
     assert "x1: number" in result.stdout
     assert "arrowhead: string (default: end; enum: end, start, both, none)" in result.stdout
     assert '"op": "draw.arrow"' in result.stdout
+    assert result.stderr == ""
+
+
+def test_schema_edit_operation_mentions_bulk_tag_prefix_cli() -> None:
+    result = run_cli("schema", "edit.rect")
+
+    assert result.returncode == 0
+    assert "CLI convenience also supports --tag-prefix PREFIX" in result.stdout
+    assert result.stderr == ""
+
+
+def test_schema_delete_operation_mentions_bulk_tag_prefix_cli() -> None:
+    result = run_cli("schema", "delete")
+
+    assert result.returncode == 0
+    assert "CLI convenience also supports --tag-prefix PREFIX" in result.stdout
     assert result.stderr == ""
 
 

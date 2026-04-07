@@ -123,6 +123,7 @@ Examples:
   linework edit arrow --session PATH --id obj_000001 --arrowhead both --arrow-size 18
   linework edit rect --session PATH --id obj_000001 --fill "#CCE5FF"
   linework edit rect --session PATH --tag note-box --fill "#CCE5FF"
+  linework edit rect --session PATH --tag-prefix house/ --fill "#CCE5FF"
 
 When --id is omitted, --tag selects the target. Use --id when you need to
 change the object's tag.
@@ -1600,8 +1601,14 @@ def cmd_schema(args: argparse.Namespace) -> int:
     print()
     print("Rules:")
     print("  draw.<type>  listed draw fields are required; optional fields remain optional")
-    print("  edit.<type>  selector(id or unique live tag) required; object fields are optional")
-    print("  delete       selector(id or unique live tag)")
+    print(
+        "  edit.<type>  selector(id or unique live tag) required; "
+        "CLI convenience also supports --tag-prefix bulk edit"
+    )
+    print(
+        "  delete       selector(id or unique live tag); "
+        "CLI convenience also supports --tag-prefix bulk delete"
+    )
     print("  undo         no payload")
     print()
     print("Special values:")
@@ -1620,6 +1627,7 @@ def cmd_schema(args: argparse.Namespace) -> int:
     print(
         "  use `linework inspect --session PATH --json` to discover IDs and tags before edit/delete"
     )
+    print("  convenience edit/delete also accept `--tag-prefix PREFIX` for bulk actions")
     print("  `tag` is hidden selector metadata, not visible diagram text")
     print("  create one session, then keep reusing the same `--session PATH` as you iterate")
     print("  `draw.circle` / `edit.circle` are convenience aliases stored as ellipses")
