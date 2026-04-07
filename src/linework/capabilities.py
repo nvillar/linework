@@ -52,8 +52,21 @@ def _selector_spec(*, allow_tag_only_note: str) -> dict[str, object]:
     }
 
 
-_TAG_FIELD = _field("string|null")
+_TAG_FIELD = _field(
+    "string|null",
+    description=(
+        "Optional object tag for later selection. "
+        "Use /-separated prefixes (e.g. house/wall) to group related objects "
+        "for filtering and bulk operations."
+    ),
+)
 _VISIBLE_FIELD = _field("boolean", default=True)
+_DX_FIELD = _field("number", description="Relative x offset; alternative to absolute x.")
+_DY_FIELD = _field("number", description="Relative y offset; alternative to absolute y.")
+_DX1_FIELD = _field("number", description="Relative start-x offset; alternative to absolute x1.")
+_DY1_FIELD = _field("number", description="Relative start-y offset; alternative to absolute y1.")
+_DX2_FIELD = _field("number", description="Relative end-x offset; alternative to absolute x2.")
+_DY2_FIELD = _field("number", description="Relative end-y offset; alternative to absolute y2.")
 _COLOR_DESCRIPTION = "#RRGGBB or #RRGGBBAA; alpha-composited in stacking order"
 _STROKE_FIELD = _field("color", default="#000000", description=_COLOR_DESCRIPTION)
 _FILL_FIELD = _field("color|null", description=_COLOR_DESCRIPTION)
@@ -304,6 +317,10 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
             "y1": _field("number"),
             "x2": _field("number"),
             "y2": _field("number"),
+            "dx1": _DX1_FIELD,
+            "dy1": _DY1_FIELD,
+            "dx2": _DX2_FIELD,
+            "dy2": _DY2_FIELD,
             "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
@@ -321,6 +338,10 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
             "y1": _field("number"),
             "x2": _field("number"),
             "y2": _field("number"),
+            "dx1": _DX1_FIELD,
+            "dy1": _DY1_FIELD,
+            "dx2": _DX2_FIELD,
+            "dy2": _DY2_FIELD,
             "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
             "stroke": _STROKE_FIELD,
@@ -338,6 +359,8 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "optional": {
             "x": _field("number"),
             "y": _field("number"),
+            "dx": _DX_FIELD,
+            "dy": _DY_FIELD,
             "width": _field("positive-number"),
             "height": _field("positive-number"),
             "tag": _TAG_FIELD,
@@ -356,6 +379,8 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "optional": {
             "x": _field("number"),
             "y": _field("number"),
+            "dx": _DX_FIELD,
+            "dy": _DY_FIELD,
             "width": _field("positive-number"),
             "height": _field("positive-number"),
             "tag": _TAG_FIELD,
@@ -374,6 +399,8 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "optional": {
             "x": _field("number", description="Top-left x of the circle bounds."),
             "y": _field("number", description="Top-left y of the circle bounds."),
+            "dx": _DX_FIELD,
+            "dy": _DY_FIELD,
             "radius": _field("positive-number"),
             "tag": _TAG_FIELD,
             "visible": _VISIBLE_FIELD,
@@ -420,6 +447,8 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "optional": {
             "x": _field("number"),
             "y": _field("number"),
+            "dx": _DX_FIELD,
+            "dy": _DY_FIELD,
             "width": _field("positive-number"),
             "height": _field("positive-number"),
             "text": _field("string"),
@@ -444,6 +473,8 @@ _OPERATION_SCHEMAS: dict[str, dict[str, object]] = {
         "optional": {
             "x": _field("number"),
             "y": _field("number"),
+            "dx": _DX_FIELD,
+            "dy": _DY_FIELD,
             "width": _field("positive-number"),
             "height": _field("positive-number"),
             "tag": _TAG_FIELD,

@@ -35,6 +35,7 @@ from linework.storage.models import BatchResult, CreatedSession, MutationResult
 from linework.storage.session import (
     SessionError,
     apply_batch,
+    apply_bulk_delete,
     apply_imported_image,
     apply_mutation,
     count_auto_sessions,
@@ -130,6 +131,7 @@ _DELETE_EPILOG = """\
 Examples:
   linework delete --session PATH --id obj_000001
   linework delete --session PATH --tag note-box
+  linework delete --session PATH --tag-prefix house/
 """
 
 _UNDO_EPILOG = """\
@@ -324,6 +326,15 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=_HelpFormatter,
     )
     inspect_parser.add_argument("--session", required=True, help="Session directory path.")
+    inspect_parser.add_argument(
+        "--tag-prefix",
+        help="Show only objects whose tag starts with this prefix.",
+    )
+    inspect_parser.add_argument(
+        "--type",
+        dest="type_filter",
+        help="Show only objects of this type (e.g. rect, text, arrow).",
+    )
     inspect_parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
     # --- export ---
@@ -362,7 +373,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     # --- _watch-impl (hidden, used by detached watcher) ---
-    watch_impl_parser = subparsers.add_parser("_watch-impl")
+    watch_impl_parser = subparsers.add_parser("_watch-impl", help=argparse.SUPPRESS)
     watch_impl_parser.add_argument("--session", required=True)
     watch_impl_parser.add_argument("--interval-ms", type=int, default=DEFAULT_INTERVAL_MS)
     watch_impl_parser.add_argument("--startup-status")
@@ -410,8 +421,11 @@ def build_parser() -> argparse.ArgumentParser:
     # --- delete ---
     delete_parser = subparsers.add_parser(
         "delete",
-        help="Delete a single object.",
-        description="Delete one object by stable ID or unique live tag.",
+        help="Delete objects by ID, tag, or tag prefix.",
+        description=(
+            "Delete one object by stable ID or unique live tag, "
+            "or delete all objects matching a tag prefix."
+        ),
         epilog=_DELETE_EPILOG,
         formatter_class=_HelpFormatter,
     )
@@ -420,6 +434,10 @@ def build_parser() -> argparse.ArgumentParser:
     delete_parser.add_argument(
         "--tag",
         help="Unique live object tag to delete when --id is omitted.",
+    )
+    delete_parser.add_argument(
+        "--tag-prefix",
+        help="Delete all objects whose tag starts with this prefix.",
     )
     _add_json_argument(delete_parser)
 
@@ -440,7 +458,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the top-level CLI."""
     effective_argv = list(sys.argv[1:] if argv is None else argv)
-    if len(effective_argv) == 0:
+    if len(effective_argv) == 0 or effective_argv == ["--help"] or effective_argv == ["-h"]:
         print(BOOTSTRAP_TEXT)
         return 0
 
@@ -514,7 +532,13 @@ def _add_json_argument(parser: argparse.ArgumentParser) -> None:
 
 def _add_tag_argument(parser: argparse.ArgumentParser) -> None:
     """Add the optional hidden tag flag."""
-    parser.add_argument("--tag", help="Optional hidden object tag for later selection.")
+    parser.add_argument(
+        "--tag",
+        help=(
+            "Optional object tag for later selection. Use /-separated prefixes "
+            "(e.g. house/wall) to group related objects for filtering and bulk operations."
+        ),
+    )
 
 
 def _add_visible_argument(parser: argparse.ArgumentParser) -> None:
@@ -617,6 +641,20 @@ def _add_arrow_size_argument(parser: argparse.ArgumentParser) -> None:
         dest="arrow_size",
         help="Arrowhead size in pixels.",
     )
+
+
+def _add_position_delta_geometry(parser: argparse.ArgumentParser) -> None:
+    """Add optional relative coordinate offsets for objects with x/y."""
+    parser.add_argument("--dx", type=float, help="Relative x offset (alternative to --x).")
+    parser.add_argument("--dy", type=float, help="Relative y offset (alternative to --y).")
+
+
+def _add_line_delta_geometry(parser: argparse.ArgumentParser) -> None:
+    """Add optional relative coordinate offsets for line/arrow endpoints."""
+    parser.add_argument("--dx1", type=float, help="Relative start-x offset (alternative to --x1).")
+    parser.add_argument("--dy1", type=float, help="Relative start-y offset (alternative to --y1).")
+    parser.add_argument("--dx2", type=float, help="Relative end-x offset (alternative to --x2).")
+    parser.add_argument("--dy2", type=float, help="Relative end-y offset (alternative to --y2).")
 
 
 def _add_text_layout_arguments(parser: argparse.ArgumentParser) -> None:
@@ -812,6 +850,7 @@ def _add_edit_line_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     parser = subparsers.add_parser("line", help="Edit a line.", formatter_class=_HelpFormatter)
     _add_edit_common_arguments(parser)
     _add_line_geometry(parser, required=False)
+    _add_line_delta_geometry(parser)
     _add_stroke_argument(parser)
     _add_stroke_width_argument(parser)
 
@@ -821,6 +860,7 @@ def _add_edit_arrow_parser(subparsers: argparse._SubParsersAction[argparse.Argum
     parser = subparsers.add_parser("arrow", help="Edit an arrow.", formatter_class=_HelpFormatter)
     _add_edit_common_arguments(parser)
     _add_line_geometry(parser, required=False)
+    _add_line_delta_geometry(parser)
     _add_stroke_argument(parser)
     _add_stroke_width_argument(parser)
     _add_arrowhead_argument(parser)
@@ -839,6 +879,7 @@ def _add_edit_rect_like_parser(
     )
     _add_edit_common_arguments(parser)
     _add_rect_like_geometry(parser, required=False)
+    _add_position_delta_geometry(parser)
     _add_stroke_argument(parser)
     _add_fill_argument(parser)
     _add_stroke_width_argument(parser)
@@ -851,6 +892,7 @@ def _add_edit_circle_parser(
     parser = subparsers.add_parser("circle", help="Edit a circle.", formatter_class=_HelpFormatter)
     _add_edit_common_arguments(parser)
     _add_circle_geometry(parser, required=False)
+    _add_position_delta_geometry(parser)
     _add_stroke_argument(parser)
     _add_fill_argument(parser)
     _add_stroke_width_argument(parser)
@@ -896,6 +938,7 @@ def _add_edit_text_parser(subparsers: argparse._SubParsersAction[argparse.Argume
     )
     _add_edit_common_arguments(parser)
     _add_text_geometry(parser, required=False)
+    _add_position_delta_geometry(parser)
     parser.add_argument("--size", type=float, help="Text size in pixels.")
     _add_text_layout_arguments(parser)
     _add_fill_argument(parser)
@@ -910,6 +953,7 @@ def _add_edit_image_parser(subparsers: argparse._SubParsersAction[argparse.Argum
     )
     _add_edit_common_arguments(parser)
     _add_rect_like_geometry(parser, required=False)
+    _add_position_delta_geometry(parser)
 
 
 def _include_optional_values(
@@ -1043,6 +1087,10 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             "y1",
             "x2",
             "y2",
+            "dx1",
+            "dy1",
+            "dx2",
+            "dy2",
             "tag",
             "visible",
             "stroke",
@@ -1056,6 +1104,10 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             "y1",
             "x2",
             "y2",
+            "dx1",
+            "dy1",
+            "dx2",
+            "dy2",
             "tag",
             "visible",
             "stroke",
@@ -1069,6 +1121,8 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             args,
             "x",
             "y",
+            "dx",
+            "dy",
             "width",
             "height",
             "tag",
@@ -1083,6 +1137,8 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             args,
             "x",
             "y",
+            "dx",
+            "dy",
             "radius",
             "tag",
             "visible",
@@ -1119,6 +1175,8 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             args,
             "x",
             "y",
+            "dx",
+            "dy",
             "width",
             "height",
             "text",
@@ -1136,6 +1194,8 @@ def _build_edit_payload(args: argparse.Namespace) -> dict[str, object]:
             args,
             "x",
             "y",
+            "dx",
+            "dy",
             "width",
             "height",
             "tag",
@@ -1706,6 +1766,58 @@ def _read_jsonl(file_path: str | None) -> list[dict[str, object]]:
 # ---------------------------------------------------------------------------
 
 
+_INSPECT_FILTER_THRESHOLD = 30
+_INSPECT_TAGGING_THRESHOLD = 50
+
+
+def _filter_objects(
+    objects: list[dict[str, object]],
+    *,
+    tag_prefix: str | None,
+    type_filter: str | None,
+) -> list[dict[str, object]]:
+    """Filter inspect objects by tag prefix and/or type."""
+    filtered = objects
+    if tag_prefix is not None:
+        filtered = [
+            obj
+            for obj in filtered
+            if isinstance(obj.get("tag"), str) and str(obj["tag"]).startswith(tag_prefix)
+        ]
+    if type_filter is not None:
+        filtered = [obj for obj in filtered if str(obj.get("type", "")) == type_filter]
+    return filtered
+
+
+def _inspect_hints(
+    *,
+    total: int,
+    shown: int,
+    tagged_count: int,
+    is_filtered: bool,
+    tag_prefix: str | None,
+    session: str,
+) -> list[str]:
+    """Build contextual nudge strings for inspect output."""
+    hints: list[str] = []
+    if is_filtered and shown > 1 and tag_prefix is not None:
+        hints.append(
+            f"To delete all {shown} matching objects: "
+            f"linework delete --session {session} --tag-prefix {tag_prefix}"
+        )
+    if not is_filtered and total > _INSPECT_FILTER_THRESHOLD:
+        hints.append(
+            "Tip: use --tag-prefix PREFIX to filter, or --type TYPE to show only one object type."
+        )
+    if total > _INSPECT_TAGGING_THRESHOLD and tagged_count < total // 2:
+        hints.append(
+            f"Tip: only {tagged_count} of {total} objects have tags. "
+            "Consistent tags (e.g. sky/cloud-1, ground/tree-2) enable "
+            "--tag-prefix filtering and bulk operations."
+        )
+    return hints
+
+
 def cmd_inspect(args: argparse.Namespace) -> int:
     """Handle ``linework inspect``."""
     try:
@@ -1713,28 +1825,64 @@ def cmd_inspect(args: argparse.Namespace) -> int:
     except (OSError, SessionError) as exc:
         return _error(str(exc), use_json=args.json)
 
+    tag_prefix: str | None = getattr(args, "tag_prefix", None)
+    type_filter: str | None = getattr(args, "type_filter", None)
+    is_filtered = tag_prefix is not None or type_filter is not None
+
+    all_objects = result.objects or []
+    total = len(all_objects)
+    tagged_count = sum(1 for obj in all_objects if obj.get("tag"))
+
+    if is_filtered:
+        shown_objects = _filter_objects(all_objects, tag_prefix=tag_prefix, type_filter=type_filter)
+    else:
+        shown_objects = all_objects
+    shown = len(shown_objects)
+
+    hints = _inspect_hints(
+        total=total,
+        shown=shown,
+        tagged_count=tagged_count,
+        is_filtered=is_filtered,
+        tag_prefix=tag_prefix,
+        session=args.session,
+    )
+
     if args.json:
-        print(json.dumps(result.to_dict(), indent=2))
+        payload = result.to_dict()
+        if is_filtered:
+            payload["objects"] = shown_objects
+            payload["object_count"] = shown
+            payload["total_object_count"] = total
+        if hints:
+            payload["hints"] = hints
+        print(json.dumps(payload, indent=2))
         return 0
 
     print(f"Session: {result.session_id}")
     print(f"Path: {result.session_path}")
     print(f"Canvas: {result.canvas.width}x{result.canvas.height}")
     print(f"Background: {result.canvas.background}")
-    print(f"Objects: {result.object_count}")
+    if is_filtered:
+        print(f"Objects: {shown} of {total} (filtered)")
+    else:
+        print(f"Objects: {result.object_count}")
     print(f"Latest render: {result.latest_render}")
 
-    if result.objects:
+    if shown_objects:
         print()
         print(f"{'ID':<14} {'Type':<10} {'Tag':<16} {'Vis':>3}  Geometry")
         print(f"{'─' * 14} {'─' * 10} {'─' * 16} {'─' * 3}  {'─' * 30}")
-        for obj in result.objects:
+        for obj in shown_objects:
             obj_id = str(obj.get("id", ""))
             obj_type = str(obj.get("type", ""))
             tag = str(obj.get("tag", "")) if obj.get("tag") else ""
             visible = "yes" if obj.get("visible", True) else "no"
             geometry = _format_geometry(obj)
             print(f"{obj_id:<14} {obj_type:<10} {tag:<16} {visible:>3}  {geometry}")
+
+    for hint in hints:
+        print(f"\n{hint}")
 
     return 0
 
@@ -2248,6 +2396,9 @@ def cmd_edit(args: argparse.Namespace) -> int:
 
 def cmd_delete(args: argparse.Namespace) -> int:
     """Handle ``linework delete``."""
+    tag_prefix: str | None = getattr(args, "tag_prefix", None)
+    if tag_prefix is not None:
+        return _cmd_bulk_delete(args, tag_prefix=tag_prefix)
     try:
         payload = _build_delete_payload(args)
     except ValueError as exc:
@@ -2259,6 +2410,36 @@ def cmd_delete(args: argparse.Namespace) -> int:
         use_json=args.json,
         summary=_delete_summary,
     )
+
+
+def _cmd_bulk_delete(args: argparse.Namespace, *, tag_prefix: str) -> int:
+    """Handle ``linework delete --tag-prefix``."""
+    try:
+        result = apply_bulk_delete(args.session, tag_prefix=tag_prefix)
+    except (OSError, SessionError, SessionLockedError, SceneEngineError) as exc:
+        return _error(str(exc), use_json=args.json)
+
+    if args.json:
+        payload = {
+            "applied": result.applied,
+            "failed": result.failed,
+            "results": result.results,
+            "session_path": result.session_path,
+            "scene_object_count": result.scene_object_count,
+            "latest_render": result.latest_render,
+            "tag_prefix": tag_prefix,
+        }
+        print(json.dumps(payload, indent=2))
+        return 1 if result.failed is not None else 0
+
+    if result.applied == 0:
+        print(f"No objects found matching tag prefix '{tag_prefix}'")
+    else:
+        print(
+            f"Deleted {result.applied} object(s) matching tag prefix '{tag_prefix}'. "
+            "Undo will restore all as one action."
+        )
+    return 0
 
 
 def cmd_undo(args: argparse.Namespace) -> int:

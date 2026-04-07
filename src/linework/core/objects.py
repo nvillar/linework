@@ -52,6 +52,41 @@ def build_object(
     raise CommandValidationError(f"unsupported draw command: {command}")
 
 
+_DELTA_MAP: dict[str, str] = {
+    "dx": "x",
+    "dy": "y",
+    "dx1": "x1",
+    "dy1": "y1",
+    "dx2": "x2",
+    "dy2": "y2",
+}
+
+
+def _resolve_deltas(
+    existing: Mapping[str, object],
+    payload: Mapping[str, object],
+) -> dict[str, object]:
+    """Convert relative delta fields to absolute coordinates.
+
+    For each ``dx``/``dy`` (or ``dx1``/``dy1``/``dx2``/``dy2``) in *payload*,
+    add the delta to the corresponding current value from *existing* and
+    replace the delta key with the absolute key.  Raises if both a delta and
+    the corresponding absolute key are provided.
+    """
+    resolved: dict[str, object] = dict(payload)
+    for delta_key, abs_key in _DELTA_MAP.items():
+        if delta_key not in resolved:
+            continue
+        if abs_key in resolved:
+            raise CommandValidationError(f"cannot specify both --{abs_key} and --{delta_key}")
+        delta_value = require_number(resolved.pop(delta_key), field=delta_key)
+        current_value = existing.get(abs_key)
+        if current_value is None or isinstance(current_value, bool):
+            raise CommandValidationError(f"object has no {abs_key} coordinate for {delta_key}")
+        resolved[abs_key] = float(current_value) + delta_value  # type: ignore[arg-type]
+    return resolved
+
+
 def apply_edit(
     *,
     existing: Mapping[str, object],
@@ -59,6 +94,7 @@ def apply_edit(
     session_path: Path,
 ) -> ObjectDict:
     """Apply an edit payload to an existing scene object."""
+    payload = _resolve_deltas(existing, payload)
     object_type = require_string(existing.get("type"), field="type")
     current = dict(existing)
 

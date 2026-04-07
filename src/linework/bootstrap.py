@@ -121,6 +121,8 @@ action; a seeded batch (via `linework new --file/--stdin`) undoes as one action.
 Selection:
   - `inspect` is the read interface for finding object IDs and tags.
   - `tag` is hidden selector metadata, not visible diagram text.
+  - Use /-separated tag prefixes (e.g. house/wall, house/roof) to group
+    related objects for filtering and bulk operations.
   - `edit` and `delete` accept `--id`, and `delete` also accepts a unique tag.
   - JSONL `delete` accepts `tag` instead of `id`.
   - For `edit`, omitting `id` makes `tag` act as the selector, so use `id` when

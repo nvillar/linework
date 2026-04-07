@@ -890,3 +890,364 @@ def test_export_fails_when_session_image_asset_is_missing(tmp_path: Path) -> Non
     assert set(payload) == {"error"}
     assert payload["error"] == "image asset missing: assets/missing.png"
     assert result.stderr == ""
+
+
+# ---------------------------------------------------------------------------
+# Milestone 15: Relative edits, filtered inspect, bulk delete
+# ---------------------------------------------------------------------------
+
+
+def test_edit_rect_with_relative_dx_dy(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    draw_result = run_cli(
+        "draw",
+        "rect",
+        "--session",
+        str(session_path),
+        "--x",
+        "100",
+        "--y",
+        "200",
+        "--width",
+        "50",
+        "--height",
+        "50",
+        "--tag",
+        "box",
+        "--json",
+        env=env,
+    )
+    assert draw_result.returncode == 0
+    obj_id = json.loads(draw_result.stdout)["results"][0]["object_id"]
+
+    edit_result = run_cli(
+        "edit",
+        "rect",
+        "--session",
+        str(session_path),
+        "--id",
+        obj_id,
+        "--dx",
+        "25",
+        "--dy",
+        "-10",
+        "--json",
+        env=env,
+    )
+    assert edit_result.returncode == 0
+
+    scene = read_scene(session_path)
+    obj = scene["objects"][0]
+    assert obj["x"] == 125.0
+    assert obj["y"] == 190.0
+
+
+def test_edit_line_with_relative_dx1_dy2(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    draw_result = run_cli(
+        "draw",
+        "line",
+        "--session",
+        str(session_path),
+        "--x1",
+        "10",
+        "--y1",
+        "20",
+        "--x2",
+        "100",
+        "--y2",
+        "200",
+        "--json",
+        env=env,
+    )
+    assert draw_result.returncode == 0
+    obj_id = json.loads(draw_result.stdout)["results"][0]["object_id"]
+
+    edit_result = run_cli(
+        "edit",
+        "line",
+        "--session",
+        str(session_path),
+        "--id",
+        obj_id,
+        "--dx1",
+        "5",
+        "--dy2",
+        "-50",
+        "--json",
+        env=env,
+    )
+    assert edit_result.returncode == 0
+
+    scene = read_scene(session_path)
+    obj = scene["objects"][0]
+    assert obj["x1"] == 15.0
+    assert obj["y1"] == 20.0  # unchanged
+    assert obj["x2"] == 100.0  # unchanged
+    assert obj["y2"] == 150.0
+
+
+def test_edit_rejects_both_absolute_and_delta(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    draw_result = run_cli(
+        "draw",
+        "rect",
+        "--session",
+        str(session_path),
+        "--x",
+        "100",
+        "--y",
+        "200",
+        "--width",
+        "50",
+        "--height",
+        "50",
+        "--json",
+        env=env,
+    )
+    assert draw_result.returncode == 0
+    obj_id = json.loads(draw_result.stdout)["results"][0]["object_id"]
+
+    edit_result = run_cli(
+        "edit",
+        "rect",
+        "--session",
+        str(session_path),
+        "--id",
+        obj_id,
+        "--x",
+        "50",
+        "--dx",
+        "25",
+        "--json",
+        env=env,
+    )
+    assert edit_result.returncode == 1
+    assert "cannot specify both" in json.loads(edit_result.stdout)["error"]
+
+
+def test_inspect_filtered_by_tag_prefix(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    for tag in ("house/wall", "house/roof", "tree/trunk"):
+        run_cli(
+            "draw",
+            "rect",
+            "--session",
+            str(session_path),
+            "--x",
+            "10",
+            "--y",
+            "10",
+            "--width",
+            "50",
+            "--height",
+            "50",
+            "--tag",
+            tag,
+            env=env,
+        )
+
+    result = run_cli(
+        "inspect",
+        "--session",
+        str(session_path),
+        "--tag-prefix",
+        "house/",
+        "--json",
+        env=env,
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["object_count"] == 2
+    assert payload["total_object_count"] == 3
+    tags = [obj.get("tag") for obj in payload["objects"]]
+    assert all(t.startswith("house/") for t in tags)
+
+
+def test_inspect_filtered_by_type(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    run_cli(
+        "draw",
+        "rect",
+        "--session",
+        str(session_path),
+        "--x",
+        "10",
+        "--y",
+        "10",
+        "--width",
+        "50",
+        "--height",
+        "50",
+        env=env,
+    )
+    run_cli(
+        "draw",
+        "line",
+        "--session",
+        str(session_path),
+        "--x1",
+        "0",
+        "--y1",
+        "0",
+        "--x2",
+        "100",
+        "--y2",
+        "100",
+        env=env,
+    )
+
+    result = run_cli(
+        "inspect",
+        "--session",
+        str(session_path),
+        "--type",
+        "rect",
+        "--json",
+        env=env,
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["object_count"] == 1
+    assert payload["total_object_count"] == 2
+    assert payload["objects"][0]["type"] == "rect"
+
+
+def test_inspect_nudge_at_many_objects(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    for i in range(35):
+        run_cli(
+            "draw",
+            "rect",
+            "--session",
+            str(session_path),
+            "--x",
+            str(i * 10),
+            "--y",
+            "10",
+            "--width",
+            "8",
+            "--height",
+            "8",
+            env=env,
+        )
+
+    result = run_cli("inspect", "--session", str(session_path), "--json", env=env)
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert "hints" in payload
+    assert any("--tag-prefix" in h for h in payload["hints"])
+
+
+def test_bulk_delete_by_tag_prefix(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    for tag in ("house/wall", "house/roof", "house/door", "tree/trunk"):
+        run_cli(
+            "draw",
+            "rect",
+            "--session",
+            str(session_path),
+            "--x",
+            "10",
+            "--y",
+            "10",
+            "--width",
+            "50",
+            "--height",
+            "50",
+            "--tag",
+            tag,
+            env=env,
+        )
+
+    result = run_cli(
+        "delete",
+        "--session",
+        str(session_path),
+        "--tag-prefix",
+        "house/",
+        "--json",
+        env=env,
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["applied"] == 3
+    assert payload["tag_prefix"] == "house/"
+
+    scene = read_scene(session_path)
+    assert len(scene["objects"]) == 1
+    assert scene["objects"][0]["tag"] == "tree/trunk"
+
+
+def test_bulk_delete_undo_restores_all(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    for tag in ("a/1", "a/2", "b/1"):
+        run_cli(
+            "draw",
+            "rect",
+            "--session",
+            str(session_path),
+            "--x",
+            "10",
+            "--y",
+            "10",
+            "--width",
+            "50",
+            "--height",
+            "50",
+            "--tag",
+            tag,
+            env=env,
+        )
+
+    run_cli(
+        "delete",
+        "--session",
+        str(session_path),
+        "--tag-prefix",
+        "a/",
+        env=env,
+    )
+    scene_after_delete = read_scene(session_path)
+    assert len(scene_after_delete["objects"]) == 1
+
+    run_cli("undo", "--session", str(session_path), env=env)
+    scene_after_undo = read_scene(session_path)
+    assert len(scene_after_undo["objects"]) == 3
+
+
+def test_bulk_delete_no_matches(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    run_cli(
+        "draw",
+        "rect",
+        "--session",
+        str(session_path),
+        "--x",
+        "10",
+        "--y",
+        "10",
+        "--width",
+        "50",
+        "--height",
+        "50",
+        "--tag",
+        "box",
+        env=env,
+    )
+
+    result = run_cli(
+        "delete",
+        "--session",
+        str(session_path),
+        "--tag-prefix",
+        "house/",
+        "--json",
+        env=env,
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["applied"] == 0
+
+    scene = read_scene(session_path)
+    assert len(scene["objects"]) == 1

@@ -627,6 +627,48 @@ def apply_batch(
     )
 
 
+def apply_bulk_delete(
+    session_path: str | Path,
+    *,
+    tag_prefix: str,
+) -> BatchResult:
+    """Delete all objects whose tag starts with *tag_prefix*.
+
+    The deletes are grouped under a single batch ID so that undo reverses
+    the entire bulk operation as one action.
+    """
+    resolved = Path(session_path).expanduser().resolve()
+
+    with writer_lock(resolved):
+        metadata = read_session_metadata(resolved)
+        commands = read_commands(resolved)
+
+        live_objects = _derive_scene_snapshot(
+            metadata=metadata, commands=commands, session_path=resolved
+        ).objects
+        matching_ids = [
+            str(obj.get("id"))
+            for obj in live_objects
+            if isinstance(obj.get("tag"), str) and str(obj["tag"]).startswith(tag_prefix)
+        ]
+
+    if not matching_ids:
+        scene = _derive_scene_snapshot(metadata=metadata, commands=commands, session_path=resolved)
+        return BatchResult(
+            applied=0,
+            failed=None,
+            results=[],
+            session_path=str(resolved),
+            scene_object_count=len(scene.objects),
+            latest_render=str(resolved / metadata.paths.latest_render),
+        )
+
+    operations: list[dict[str, object]] = [
+        {"op": "delete", "payload": {"id": obj_id}} for obj_id in matching_ids
+    ]
+    return apply_batch(str(resolved), operations=operations)
+
+
 # ---------------------------------------------------------------------------
 # Session listing and cleanup
 # ---------------------------------------------------------------------------

@@ -84,8 +84,6 @@ def test_top_level_help_includes_golden_path() -> None:
     result = run_cli("--help")
 
     assert result.returncode == 0
-    assert "Orientation:" in result.stdout
-    assert "Capability discovery:" in result.stdout
     assert "Golden path:" in result.stdout
     assert "compact capability overview" in result.stdout
     assert "linework schema draw.arrow" in result.stdout
@@ -93,6 +91,8 @@ def test_top_level_help_includes_golden_path() -> None:
     assert "full manifest" in result.stdout
     assert "linework schema" in result.stdout
     assert "linework draw rect --session PATH" in result.stdout
+    assert "linework watch --session PATH" in result.stdout
+    assert "_watch-impl" not in result.stdout
     assert result.stderr == ""
 
 

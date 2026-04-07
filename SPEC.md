@@ -568,6 +568,10 @@ Flags:
 
 - `--session PATH`
 - `--json`
+- `--tag-prefix PREFIX` — show only objects whose tag starts with this prefix
+- `--type TYPE` — show only objects of this type (e.g. `rect`, `text`, `arrow`)
+
+When filtered, JSON output includes `total_object_count` alongside the filtered `object_count`. When filtered results contain multiple objects, a `hints` array includes a `bulk_delete_hint` suggesting the corresponding `delete --tag-prefix` command. When an unfiltered inspect returns more than 30 objects, hints suggest using `--tag-prefix` or `--type` to filter. When more than 50 objects exist and fewer than half have tags, hints suggest adopting the `prefix/name` tagging convention.
 
 ### 9.6 `linework export`
 
@@ -648,8 +652,10 @@ live tag.
 Behavior:
 
 - requires `--session PATH`
-- requires `--id OBJ_ID` or `--tag TAG`
-- removes the object from current scene state
+- requires one of: `--id OBJ_ID`, `--tag TAG`, or `--tag-prefix PREFIX`
+- `--id` and `--tag` delete a single object
+- `--tag-prefix PREFIX` deletes all objects whose tag starts with the prefix as a batch; undo restores them all as one action
+- removes matched objects from current scene state
 - preserves recoverability through command history and undo
 
 ### 9.11 `linework undo`
@@ -660,6 +666,7 @@ Behavior:
 
 - whole-action undo
 - a successful seeded batch (via `linework new --file/--stdin`) undoes as one action
+- a bulk delete (via `delete --tag-prefix`) undoes as one action, restoring all deleted objects
 - implemented through append-only history semantics
 - updates `scene.json`
 - re-renders `render/latest.png`
@@ -680,9 +687,15 @@ The convenience primitive commands must use these parameter names:
 
 Create commands may also accept:
 
-- `--tag STRING`
+- `--tag STRING` (use `/`-separated prefixes like `house/wall` for grouping)
 - `--visible true|false`
 - applicable style and layout flags such as `--stroke`, `--fill`, `--stroke-width`, `--size`, `--arrowhead`, `--arrow-size`, `--align`, `--valign`, and `--padding`
+
+Edit commands additionally support relative coordinate offsets:
+
+- `--dx N`, `--dy N` for objects with x/y coordinates (rect, ellipse, circle, text, image)
+- `--dx1 N`, `--dy1 N`, `--dx2 N`, `--dy2 N` for line/arrow endpoints
+- deltas are mutually exclusive with absolute coordinates on the same axis
 
 Edit commands must use the same field names and additionally require:
 

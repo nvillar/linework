@@ -153,9 +153,19 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - added session-count cleanup nudge to `linework new` output when ≥10 sessions exist
 - updated bootstrap/help/schema/docs to teach the draw/edit/delete convenience workflow as the primary interface
 
+#### Milestone 15: Raise the complexity ceiling (complete)
+
+- relative coordinate edits (`--dx`/`--dy` and `--dx1`/`--dy1`/`--dx2`/`--dy2`) on all edit subcommands eliminate coordinate math when repositioning objects
+- filtered inspect (`--tag-prefix PREFIX`, `--type TYPE`) lets agents see only relevant objects instead of the full scene
+- bulk delete by tag prefix (`delete --tag-prefix PREFIX`) removes matching objects in one command with batch-aware undo
+- contextual nudges: inspect hints at >30 objects, sparse-tagging hint at >50, bulk delete hint in filtered results
+- tag prefix convention (`house/wall`, `tree/trunk`) taught in bootstrap text, schema, and CLI help
+- `linework --help` and `linework -h` now show the same rich bootstrap text as `linework` with no args
+- `_watch-impl` hidden from subcommand list
+
 ### Current implementation status
 
-Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14.
+Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15.
 
 Current user-facing command surface:
 
@@ -206,6 +216,10 @@ Implementation notes:
 - text objects now use explicit layout boxes with `align`, `valign`, and optional `padding`; wrapping uses the padded inner box width
 - renderer-drawn objects now render through per-object RGBA layers and are alpha-composited in creation order; image objects continue to use explicit `alpha_composite`
 - `linework edit` can select by tag when `--id` is omitted; use `--id` when retagging
+- all edit subcommands support relative coordinate offsets (`--dx`/`--dy` and `--dx1`/`--dy1`/`--dx2`/`--dy2` for lines/arrows); mutually exclusive with absolute coordinates on the same axis
+- `linework inspect` supports `--tag-prefix` and `--type` filters; contextual hints appear at >30 objects (suggest filtering) and >50 objects with sparse tags (suggest tagging convention)
+- `linework delete --tag-prefix PREFIX` deletes all matching objects as a batch; undo restores them all as one action
+- tag prefixes use `/`-separated conventions (e.g. `house/wall`) for grouping; taught in bootstrap, schema, and CLI help
 - watcher reads `render/latest.png` without taking the writer lock and keeps the last good image on transient read mismatches
 - `linework watch` now preserves unavailable-environment reasons and, on Windows, rejects detached/noninteractive GUI contexts before reporting success
 - watcher startup handshake confirms the window is visible on screen (via `winfo_viewable`) before signalling "ready" to the parent; if the window never becomes visible, the child reports failure and the parent relays a clear error
@@ -214,4 +228,4 @@ Implementation notes:
 - `linework --version` checks the remote repo for newer tags via `git ls-remote` (5s timeout, best-effort); shows a platform-aware `uv tool install --no-cache --reinstall-package linework git+...@vX.Y.Z` command if an update is available
 - Windows: `_is_pid_alive` uses Win32 `OpenProcess` API instead of `os.kill(pid, 0)` (which sends `CTRL_C_EVENT` on Windows)
 
-Next milestone: **TBD.** Deferred future directions are canvas resize / fit-to-contents, grouping, auto-layout, higher-level composites, and themes / reusable styles.
+Next milestone: **TBD.** Deferred future directions are bulk edit by tag prefix, canvas resize / fit-to-contents, hierarchical groups with relative coordinate systems, tag prefix summary in inspect, auto-layout, higher-level composites, and themes / reusable styles.
