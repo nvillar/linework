@@ -2190,7 +2190,9 @@ def _launch_detached_watcher(
         else:
             # Use file-based /dev/null rather than subprocess.DEVNULL.
             # On macOS, subprocess.DEVNULL can interfere with tkinter's
-            # Tcl resource discovery when stdin is redirected.
+            # Tcl resource discovery when stdin is redirected.  See
+            # _ensure_tcl_library() in linework/watch/__init__.py for the
+            # full explanation of the venv-symlink + stdin=/dev/null bug.
             process = _launch_detached_watcher_posix(cmd)
 
         _await_watcher_startup(process, status_path)

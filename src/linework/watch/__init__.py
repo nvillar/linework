@@ -51,15 +51,45 @@ class Toolkit:
 
 
 def _ensure_tcl_library() -> None:
-    """Set TCL_LIBRARY when Tcl's built-in discovery would fail.
+    """Set ``TCL_LIBRARY`` when Tcl's built-in ``init.tcl`` discovery would fail.
 
-    python-build-standalone's Tcl 9 relies on ``dladdr()`` to locate
-    ``init.tcl`` relative to ``libtcl9.0.dylib``.  That discovery breaks on
-    macOS when the Python binary is a venv symlink **and** stdin has been
-    redirected to ``/dev/null`` (common in agent harnesses like OpenCode).
+    **Background**
 
-    When ``TCL_LIBRARY`` is already set or when the real Python prefix does
-    not contain a recognisable ``tcl*/init.tcl``, this is a no-op.
+    ``python-build-standalone`` ships Tcl 9 with a build-time prefix of
+    ``/tools/deps`` baked into ``libtcl9.0.dylib``.  At runtime that path
+    does not exist, so Tcl falls back to ``dladdr()`` to discover where
+    ``libtcl9.0.dylib`` actually lives on disk, then finds ``init.tcl``
+    relative to that location (e.g. ``.../lib/tcl9.0/init.tcl``).
+
+    **The bug**
+
+    On macOS, when two conditions combine the ``dladdr()`` fallback silently
+    fails and Tcl only searches paths relative to ``sys.prefix`` (the venv
+    directory), where ``tcl9.0/`` does not exist:
+
+    1. The Python binary is invoked through a **venv symlink** (so
+       ``sys.prefix`` points to the venv, not the real Python install).
+    2. **stdin is ``/dev/null``** — this is the default for agent harnesses
+       like OpenCode, which set ``stdin: "ignore"`` on every subprocess.
+
+    Either condition alone is fine; the combination breaks Tcl's internal
+    ``Tcl_FindExecutable`` / ``dladdr`` code path.
+
+    See also the related comment in ``cli.py`` at
+    ``_launch_detached_watcher_posix`` which avoids ``subprocess.DEVNULL``
+    for the same class of issue.
+
+    **The fix**
+
+    Before ``import tkinter``, resolve the **real** Python binary path via
+    ``os.path.realpath(sys.executable)``, walk up to the install prefix,
+    and look for ``lib/tcl*/init.tcl``.  If found, set ``TCL_LIBRARY`` so
+    Tcl skips its broken ``dladdr`` path entirely.
+
+    This is a **no-op** when:
+    - ``TCL_LIBRARY`` is already set (user or environment override), or
+    - the real Python prefix does not contain a ``tcl*/init.tcl`` (e.g.
+      system Python, Homebrew, or a build without Tcl).
     """
     import os
     import sys
