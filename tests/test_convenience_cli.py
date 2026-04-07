@@ -1298,9 +1298,9 @@ def test_inspect_tag_prefix_summary(tmp_path: Path) -> None:
     assert result.returncode == 0
     payload = json.loads(result.stdout)
     prefixes = payload["tag_prefixes"]
-    assert prefixes["house/"] == 2
-    assert prefixes["tree/"] == 2
-    assert prefixes[""] == 1
+    assert prefixes["house/"] == {"rect": 2}
+    assert prefixes["tree/"] == {"rect": 2}
+    assert prefixes[""] == {"line": 1}
 
 
 def test_inspect_tag_prefix_summary_plaintext(tmp_path: Path) -> None:
@@ -1327,8 +1327,8 @@ def test_inspect_tag_prefix_summary_plaintext(tmp_path: Path) -> None:
     result = run_cli("inspect", "--session", str(session_path), env=env)
     assert result.returncode == 0
     assert "Tag groups:" in result.stdout
-    assert "a/ (2)" in result.stdout
-    assert "b/ (1)" in result.stdout
+    assert "a/ (2: 2 rect)" in result.stdout
+    assert "b/ (1: 1 rect)" in result.stdout
 
 
 def test_bulk_edit_by_tag_prefix(tmp_path: Path) -> None:
@@ -1565,3 +1565,74 @@ def test_bulk_edit_only_matches_type(tmp_path: Path) -> None:
     line = [o for o in scene["objects"] if o["type"] == "line"][0]
     assert rect["fill"] == "#FF0000"
     assert "fill" not in line
+
+
+def test_points_flag_gives_helpful_error(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    result = run_cli(
+        "draw",
+        "polyline",
+        "--session",
+        str(session_path),
+        "--points",
+        "[[10,20],[30,40]]",
+        env=env,
+    )
+    assert result.returncode == 1
+    assert "--point X,Y" in result.stderr
+
+
+def test_bulk_edit_reports_skipped_types(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    run_cli(
+        "draw",
+        "rect",
+        "--session",
+        str(session_path),
+        "--x",
+        "10",
+        "--y",
+        "10",
+        "--width",
+        "50",
+        "--height",
+        "50",
+        "--tag",
+        "a/rect",
+        env=env,
+    )
+    run_cli(
+        "draw",
+        "line",
+        "--session",
+        str(session_path),
+        "--x1",
+        "0",
+        "--y1",
+        "0",
+        "--x2",
+        "100",
+        "--y2",
+        "100",
+        "--tag",
+        "a/line",
+        env=env,
+    )
+
+    result = run_cli(
+        "edit",
+        "rect",
+        "--session",
+        str(session_path),
+        "--tag-prefix",
+        "a/",
+        "--fill",
+        "#FF0000",
+        "--json",
+        env=env,
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["applied"] == 1
+    assert payload["total_in_prefix"] == 2
+    assert payload["skipped_types"] == {"line": 1}

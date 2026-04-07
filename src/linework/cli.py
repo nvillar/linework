@@ -463,6 +463,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(BOOTSTRAP_TEXT)
         return 0
 
+    if "--points" in effective_argv:
+        print(
+            "error: unknown flag --points. Did you mean --point X,Y? "
+            "Use --point multiple times to add points: --point 10,20 --point 30,40",
+            file=sys.stderr,
+        )
+        return 1
+
     parser = build_parser()
     args = parser.parse_args(effective_argv)
 
@@ -1775,23 +1783,30 @@ _INSPECT_FILTER_THRESHOLD = 30
 _INSPECT_TAGGING_THRESHOLD = 50
 
 
-def _tag_prefix_summary(objects: list[dict[str, object]]) -> dict[str, int]:
-    """Build a summary of object counts grouped by tag prefix.
+def _tag_prefix_summary(
+    objects: list[dict[str, object]],
+) -> dict[str, dict[str, int]]:
+    """Build a summary of object counts grouped by tag prefix and type.
 
     Tags are split on the first ``/``. Objects without tags are counted under
     the empty string key.  Returns an empty dict when no objects have tags.
+
+    Each prefix maps to a dict of ``{type: count}``, e.g.
+    ``{"house/": {"rect": 6, "polygon": 1}, "": {"line": 2}}``.
     """
-    counts: dict[str, int] = {}
+    counts: dict[str, dict[str, int]] = {}
     has_any_tag = False
     for obj in objects:
         tag = obj.get("tag")
+        obj_type = str(obj.get("type", "unknown"))
         if isinstance(tag, str) and tag:
             has_any_tag = True
             slash = tag.find("/")
             prefix = tag[: slash + 1] if slash >= 0 else tag
-            counts[prefix] = counts.get(prefix, 0) + 1
         else:
-            counts[""] = counts.get("", 0) + 1
+            prefix = ""
+        type_counts = counts.setdefault(prefix, {})
+        type_counts[obj_type] = type_counts.get(obj_type, 0) + 1
     return counts if has_any_tag else {}
 
 
@@ -1903,9 +1918,16 @@ def cmd_inspect(args: argparse.Namespace) -> int:
     print(f"Latest render: {result.latest_render}")
 
     if prefix_summary:
-        named = [f"{k} ({v})" for k, v in prefix_summary.items() if k]
-        untagged = prefix_summary.get("", 0)
-        parts = named + ([f"{untagged} untagged"] if untagged else [])
+        named_parts: list[str] = []
+        for prefix, type_counts in prefix_summary.items():
+            if not prefix:
+                continue
+            total_count = sum(type_counts.values())
+            type_detail = ", ".join(f"{c} {t}" for t, c in type_counts.items())
+            named_parts.append(f"{prefix} ({total_count}: {type_detail})")
+        untagged_counts = prefix_summary.get("", {})
+        untagged_total = sum(untagged_counts.values())
+        parts = named_parts + ([f"{untagged_total} untagged"] if untagged_total else [])
         print(f"Tag groups: {', '.join(parts)}")
 
     if shown_objects:
@@ -2541,6 +2563,24 @@ def _cmd_bulk_edit(args: argparse.Namespace, *, tag_prefix: str) -> int:
     # Map circle type to stored ellipse type for matching.
     stored_type = "ellipse" if edit_type == "circle" else edit_type
 
+    # Pre-inspect to count skipped objects for transparent reporting.
+    try:
+        inspect_result = inspect_session(args.session)
+    except (OSError, SessionError) as exc:
+        return _error(str(exc), use_json=args.json)
+
+    prefix_objects = [
+        obj
+        for obj in (inspect_result.objects or [])
+        if isinstance(obj.get("tag"), str) and str(obj["tag"]).startswith(tag_prefix)
+    ]
+    total_in_prefix = len(prefix_objects)
+    skipped_types: dict[str, int] = {}
+    for obj in prefix_objects:
+        obj_type = str(obj.get("type", ""))
+        if obj_type != stored_type:
+            skipped_types[obj_type] = skipped_types.get(obj_type, 0) + 1
+
     try:
         result = apply_bulk_edit(
             args.session,
@@ -2552,7 +2592,7 @@ def _cmd_bulk_edit(args: argparse.Namespace, *, tag_prefix: str) -> int:
         return _error(str(exc), use_json=args.json)
 
     if args.json:
-        payload = {
+        payload: dict[str, object] = {
             "applied": result.applied,
             "failed": result.failed,
             "results": result.results,
@@ -2560,16 +2600,24 @@ def _cmd_bulk_edit(args: argparse.Namespace, *, tag_prefix: str) -> int:
             "scene_object_count": result.scene_object_count,
             "latest_render": result.latest_render,
             "tag_prefix": tag_prefix,
+            "total_in_prefix": total_in_prefix,
         }
+        if skipped_types:
+            payload["skipped_types"] = skipped_types
         print(json.dumps(payload, indent=2))
         return 1 if result.failed is not None else 0
 
     if result.applied == 0:
         print(f"No {edit_type} objects found matching tag prefix '{tag_prefix}'")
     else:
+        skipped_total = sum(skipped_types.values())
+        skipped_msg = ""
+        if skipped_total:
+            type_list = ", ".join(f"{v} {k}" for k, v in skipped_types.items())
+            skipped_msg = f" Skipped {skipped_total} non-{edit_type} object(s) ({type_list})."
         print(
             f"Edited {result.applied} {edit_type} object(s) matching tag prefix "
-            f"'{tag_prefix}'. Other types in this prefix were skipped. "
+            f"'{tag_prefix}'.{skipped_msg} "
             "Undo will reverse all as one action."
         )
     return 0
