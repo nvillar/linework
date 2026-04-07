@@ -571,7 +571,9 @@ Flags:
 - `--tag-prefix PREFIX` — show only objects whose tag starts with this prefix
 - `--type TYPE` — show only objects of this type (e.g. `rect`, `text`, `arrow`)
 
-When filtered, JSON output includes `total_object_count` alongside the filtered `object_count`. When filtered results contain multiple objects, a `hints` array includes a `bulk_delete_hint` suggesting the corresponding `delete --tag-prefix` command. When an unfiltered inspect returns more than 30 objects, hints suggest using `--tag-prefix` or `--type` to filter. When more than 50 objects exist and fewer than half have tags, hints suggest adopting the `prefix/name` tagging convention.
+When filtered, JSON output includes `total_object_count` alongside the filtered `object_count`. When filtered results contain multiple objects, a `hints` array includes bulk delete and bulk edit suggestions. When an unfiltered inspect returns more than 30 objects, hints suggest using `--tag-prefix` or `--type` to filter. When more than 50 objects exist and fewer than half have tags, hints suggest adopting the `prefix/name` tagging convention.
+
+When tagged objects exist, JSON output includes a `tag_prefixes` field mapping each tag prefix to its object count (e.g. `{"house/": 9, "tree/": 4, "": 3}`), and plaintext output shows a `Tag groups:` summary line. This provides scene-at-a-glance structure without reading individual objects.
 
 ### 9.6 `linework export`
 
@@ -625,8 +627,8 @@ Primitive subcommands:
 
 ### 9.9 `linework edit`
 
-Convenience command for modifying a single existing object by stable ID or
-unique live tag.
+Convenience command for modifying existing objects by stable ID, unique live tag,
+or tag prefix.
 
 Primitive subcommands:
 
@@ -643,6 +645,11 @@ Primitive subcommands:
 All edit commands must support partial updates. Only provided fields are changed.
 
 Edits must not change stacking order.
+
+Bulk edit: `edit TYPE --tag-prefix PREFIX` edits all objects of the specified type
+whose tag starts with the prefix. The operation is type-scoped — only objects
+matching the subcommand type are affected; other types in the prefix are silently
+skipped. Bulk edits are grouped as a batch so undo reverses them all as one action.
 
 ### 9.10 `linework delete`
 

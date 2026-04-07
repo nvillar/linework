@@ -669,6 +669,56 @@ def apply_bulk_delete(
     return apply_batch(str(resolved), operations=operations)
 
 
+def apply_bulk_edit(
+    session_path: str | Path,
+    *,
+    tag_prefix: str,
+    object_type: str,
+    edit_payload: dict[str, object],
+) -> BatchResult:
+    """Edit all objects matching *tag_prefix* and *object_type*.
+
+    Each matching object gets an edit operation with *edit_payload* applied.
+    The edits are grouped as a batch so undo reverses them all as one action.
+    Properties in *edit_payload* that don't apply to a given object are
+    silently handled by the scene engine's normal edit validation.
+    """
+    resolved = Path(session_path).expanduser().resolve()
+
+    with writer_lock(resolved):
+        metadata = read_session_metadata(resolved)
+        commands = read_commands(resolved)
+
+        live_objects = _derive_scene_snapshot(
+            metadata=metadata, commands=commands, session_path=resolved
+        ).objects
+        matching = [
+            obj
+            for obj in live_objects
+            if str(obj.get("type", "")) == object_type
+            and isinstance(obj.get("tag"), str)
+            and str(obj["tag"]).startswith(tag_prefix)
+        ]
+
+    if not matching:
+        scene = _derive_scene_snapshot(metadata=metadata, commands=commands, session_path=resolved)
+        return BatchResult(
+            applied=0,
+            failed=None,
+            results=[],
+            session_path=str(resolved),
+            scene_object_count=len(scene.objects),
+            latest_render=str(resolved / metadata.paths.latest_render),
+        )
+
+    operations: list[dict[str, object]] = []
+    for obj in matching:
+        payload: dict[str, object] = {"id": str(obj["id"])}
+        payload.update(edit_payload)
+        operations.append({"op": f"edit.{object_type}", "payload": payload})
+    return apply_batch(str(resolved), operations=operations)
+
+
 # ---------------------------------------------------------------------------
 # Session listing and cleanup
 # ---------------------------------------------------------------------------

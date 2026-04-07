@@ -36,6 +36,7 @@ from linework.storage.session import (
     SessionError,
     apply_batch,
     apply_bulk_delete,
+    apply_bulk_edit,
     apply_imported_image,
     apply_mutation,
     count_auto_sessions,
@@ -582,6 +583,10 @@ def _add_edit_common_arguments(parser: argparse.ArgumentParser) -> None:
         "--tag",
         help="When --id is provided, set the hidden object tag. When --id is omitted, "
         "select the target by its unique live tag.",
+    )
+    parser.add_argument(
+        "--tag-prefix",
+        help="Edit all objects of this type whose tag starts with this prefix.",
     )
     _add_visible_argument(parser)
     _add_json_argument(parser)
@@ -1770,6 +1775,26 @@ _INSPECT_FILTER_THRESHOLD = 30
 _INSPECT_TAGGING_THRESHOLD = 50
 
 
+def _tag_prefix_summary(objects: list[dict[str, object]]) -> dict[str, int]:
+    """Build a summary of object counts grouped by tag prefix.
+
+    Tags are split on the first ``/``. Objects without tags are counted under
+    the empty string key.  Returns an empty dict when no objects have tags.
+    """
+    counts: dict[str, int] = {}
+    has_any_tag = False
+    for obj in objects:
+        tag = obj.get("tag")
+        if isinstance(tag, str) and tag:
+            has_any_tag = True
+            slash = tag.find("/")
+            prefix = tag[: slash + 1] if slash >= 0 else tag
+            counts[prefix] = counts.get(prefix, 0) + 1
+        else:
+            counts[""] = counts.get("", 0) + 1
+    return counts if has_any_tag else {}
+
+
 def _filter_objects(
     objects: list[dict[str, object]],
     *,
@@ -1804,6 +1829,10 @@ def _inspect_hints(
         hints.append(
             f"To delete all {shown} matching objects: "
             f"linework delete --session {session} --tag-prefix {tag_prefix}"
+        )
+        hints.append(
+            f"To bulk-edit matching objects (scoped by type): "
+            f'linework edit TYPE --session {session} --tag-prefix {tag_prefix} --fill "#RRGGBB"'
         )
     if not is_filtered and total > _INSPECT_FILTER_THRESHOLD:
         hints.append(
@@ -1848,12 +1877,16 @@ def cmd_inspect(args: argparse.Namespace) -> int:
         session=args.session,
     )
 
+    prefix_summary = _tag_prefix_summary(all_objects)
+
     if args.json:
         payload = result.to_dict()
         if is_filtered:
             payload["objects"] = shown_objects
             payload["object_count"] = shown
             payload["total_object_count"] = total
+        if prefix_summary:
+            payload["tag_prefixes"] = prefix_summary
         if hints:
             payload["hints"] = hints
         print(json.dumps(payload, indent=2))
@@ -1868,6 +1901,12 @@ def cmd_inspect(args: argparse.Namespace) -> int:
     else:
         print(f"Objects: {result.object_count}")
     print(f"Latest render: {result.latest_render}")
+
+    if prefix_summary:
+        named = [f"{k} ({v})" for k, v in prefix_summary.items() if k]
+        untagged = prefix_summary.get("", 0)
+        parts = named + ([f"{untagged} untagged"] if untagged else [])
+        print(f"Tag groups: {', '.join(parts)}")
 
     if shown_objects:
         print()
@@ -2381,6 +2420,9 @@ def cmd_draw(args: argparse.Namespace) -> int:
 
 def cmd_edit(args: argparse.Namespace) -> int:
     """Handle ``linework edit``."""
+    tag_prefix: str | None = getattr(args, "tag_prefix", None)
+    if tag_prefix is not None:
+        return _cmd_bulk_edit(args, tag_prefix=tag_prefix)
     try:
         payload = _build_edit_payload(args)
     except ValueError as exc:
@@ -2392,6 +2434,145 @@ def cmd_edit(args: argparse.Namespace) -> int:
         use_json=args.json,
         summary=_edit_summary,
     )
+
+
+def _cmd_bulk_edit(args: argparse.Namespace, *, tag_prefix: str) -> int:
+    """Handle ``linework edit TYPE --tag-prefix``."""
+    # Build edit payload without the selector (id/tag) — bulk edit supplies IDs internally.
+    edit_payload: dict[str, object] = {}
+    edit_type = args.edit_type
+
+    if edit_type in {"line", "arrow"}:
+        _include_optional_values(
+            edit_payload,
+            args,
+            "x1",
+            "y1",
+            "x2",
+            "y2",
+            "dx1",
+            "dy1",
+            "dx2",
+            "dy2",
+            "stroke",
+            "stroke_width",
+            "visible",
+        )
+        if edit_type == "arrow":
+            _include_optional_values(edit_payload, args, "arrowhead", "arrow_size")
+    elif edit_type in {"rect", "ellipse"}:
+        _include_optional_values(
+            edit_payload,
+            args,
+            "x",
+            "y",
+            "dx",
+            "dy",
+            "width",
+            "height",
+            "stroke",
+            "fill",
+            "stroke_width",
+            "visible",
+        )
+    elif edit_type == "circle":
+        _include_optional_values(
+            edit_payload,
+            args,
+            "x",
+            "y",
+            "dx",
+            "dy",
+            "radius",
+            "stroke",
+            "fill",
+            "stroke_width",
+            "visible",
+        )
+    elif edit_type == "polyline":
+        _include_optional_values(edit_payload, args, "stroke", "stroke_width", "visible")
+        if getattr(args, "points", None) is not None:
+            edit_payload["points"] = args.points
+    elif edit_type == "polygon":
+        _include_optional_values(
+            edit_payload,
+            args,
+            "stroke",
+            "fill",
+            "stroke_width",
+            "visible",
+        )
+        if getattr(args, "points", None) is not None:
+            edit_payload["points"] = args.points
+    elif edit_type == "text":
+        _include_optional_values(
+            edit_payload,
+            args,
+            "x",
+            "y",
+            "dx",
+            "dy",
+            "width",
+            "height",
+            "text",
+            "size",
+            "align",
+            "valign",
+            "padding",
+            "fill",
+            "visible",
+        )
+    elif edit_type == "image":
+        _include_optional_values(
+            edit_payload,
+            args,
+            "x",
+            "y",
+            "dx",
+            "dy",
+            "width",
+            "height",
+            "visible",
+        )
+
+    if not edit_payload:
+        return _error("at least one field must be provided for bulk edit", use_json=args.json)
+
+    # Map circle type to stored ellipse type for matching.
+    stored_type = "ellipse" if edit_type == "circle" else edit_type
+
+    try:
+        result = apply_bulk_edit(
+            args.session,
+            tag_prefix=tag_prefix,
+            object_type=stored_type,
+            edit_payload=edit_payload,
+        )
+    except (OSError, SessionError, SessionLockedError, SceneEngineError) as exc:
+        return _error(str(exc), use_json=args.json)
+
+    if args.json:
+        payload = {
+            "applied": result.applied,
+            "failed": result.failed,
+            "results": result.results,
+            "session_path": result.session_path,
+            "scene_object_count": result.scene_object_count,
+            "latest_render": result.latest_render,
+            "tag_prefix": tag_prefix,
+        }
+        print(json.dumps(payload, indent=2))
+        return 1 if result.failed is not None else 0
+
+    if result.applied == 0:
+        print(f"No {edit_type} objects found matching tag prefix '{tag_prefix}'")
+    else:
+        print(
+            f"Edited {result.applied} {edit_type} object(s) matching tag prefix "
+            f"'{tag_prefix}'. Other types in this prefix were skipped. "
+            "Undo will reverse all as one action."
+        )
+    return 0
 
 
 def cmd_delete(args: argparse.Namespace) -> int:

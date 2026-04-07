@@ -1251,3 +1251,317 @@ def test_bulk_delete_no_matches(tmp_path: Path) -> None:
 
     scene = read_scene(session_path)
     assert len(scene["objects"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Milestone 16: Bulk edit, tag prefix summary
+# ---------------------------------------------------------------------------
+
+
+def test_inspect_tag_prefix_summary(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    for tag in ("house/wall", "house/roof", "tree/trunk", "tree/leaves"):
+        run_cli(
+            "draw",
+            "rect",
+            "--session",
+            str(session_path),
+            "--x",
+            "10",
+            "--y",
+            "10",
+            "--width",
+            "50",
+            "--height",
+            "50",
+            "--tag",
+            tag,
+            env=env,
+        )
+    run_cli(
+        "draw",
+        "line",
+        "--session",
+        str(session_path),
+        "--x1",
+        "0",
+        "--y1",
+        "0",
+        "--x2",
+        "100",
+        "--y2",
+        "100",
+        env=env,
+    )
+
+    result = run_cli("inspect", "--session", str(session_path), "--json", env=env)
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    prefixes = payload["tag_prefixes"]
+    assert prefixes["house/"] == 2
+    assert prefixes["tree/"] == 2
+    assert prefixes[""] == 1
+
+
+def test_inspect_tag_prefix_summary_plaintext(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    for tag in ("a/1", "a/2", "b/1"):
+        run_cli(
+            "draw",
+            "rect",
+            "--session",
+            str(session_path),
+            "--x",
+            "10",
+            "--y",
+            "10",
+            "--width",
+            "50",
+            "--height",
+            "50",
+            "--tag",
+            tag,
+            env=env,
+        )
+
+    result = run_cli("inspect", "--session", str(session_path), env=env)
+    assert result.returncode == 0
+    assert "Tag groups:" in result.stdout
+    assert "a/ (2)" in result.stdout
+    assert "b/ (1)" in result.stdout
+
+
+def test_bulk_edit_by_tag_prefix(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    for tag in ("house/wall", "house/roof", "tree/trunk"):
+        run_cli(
+            "draw",
+            "rect",
+            "--session",
+            str(session_path),
+            "--x",
+            "100",
+            "--y",
+            "100",
+            "--width",
+            "50",
+            "--height",
+            "50",
+            "--tag",
+            tag,
+            env=env,
+        )
+
+    result = run_cli(
+        "edit",
+        "rect",
+        "--session",
+        str(session_path),
+        "--tag-prefix",
+        "house/",
+        "--dx",
+        "30",
+        "--dy",
+        "-20",
+        "--json",
+        env=env,
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["applied"] == 2
+    assert payload["tag_prefix"] == "house/"
+
+    scene = read_scene(session_path)
+    for obj in scene["objects"]:
+        if obj["tag"].startswith("house/"):
+            assert obj["x"] == 130.0
+            assert obj["y"] == 80.0
+        else:
+            assert obj["x"] == 100.0
+            assert obj["y"] == 100.0
+
+
+def test_bulk_edit_fill_by_tag_prefix(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    for tag in ("tree/1", "tree/2", "house/1"):
+        run_cli(
+            "draw",
+            "rect",
+            "--session",
+            str(session_path),
+            "--x",
+            "10",
+            "--y",
+            "10",
+            "--width",
+            "50",
+            "--height",
+            "50",
+            "--fill",
+            "#00FF00",
+            "--tag",
+            tag,
+            env=env,
+        )
+
+    result = run_cli(
+        "edit",
+        "rect",
+        "--session",
+        str(session_path),
+        "--tag-prefix",
+        "tree/",
+        "--fill",
+        "#FF8C00",
+        "--json",
+        env=env,
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["applied"] == 2
+
+    scene = read_scene(session_path)
+    for obj in scene["objects"]:
+        if obj["tag"].startswith("tree/"):
+            assert obj["fill"] == "#FF8C00"
+        else:
+            assert obj["fill"] == "#00FF00"
+
+
+def test_bulk_edit_undo_restores_all(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    for tag in ("a/1", "a/2"):
+        run_cli(
+            "draw",
+            "rect",
+            "--session",
+            str(session_path),
+            "--x",
+            "100",
+            "--y",
+            "100",
+            "--width",
+            "50",
+            "--height",
+            "50",
+            "--tag",
+            tag,
+            env=env,
+        )
+
+    run_cli(
+        "edit",
+        "rect",
+        "--session",
+        str(session_path),
+        "--tag-prefix",
+        "a/",
+        "--dx",
+        "50",
+        env=env,
+    )
+    scene_after_edit = read_scene(session_path)
+    for obj in scene_after_edit["objects"]:
+        assert obj["x"] == 150.0
+
+    run_cli("undo", "--session", str(session_path), env=env)
+    scene_after_undo = read_scene(session_path)
+    for obj in scene_after_undo["objects"]:
+        assert obj["x"] == 100.0
+
+
+def test_bulk_edit_no_matches(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    run_cli(
+        "draw",
+        "rect",
+        "--session",
+        str(session_path),
+        "--x",
+        "10",
+        "--y",
+        "10",
+        "--width",
+        "50",
+        "--height",
+        "50",
+        "--tag",
+        "box",
+        env=env,
+    )
+
+    result = run_cli(
+        "edit",
+        "rect",
+        "--session",
+        str(session_path),
+        "--tag-prefix",
+        "house/",
+        "--dx",
+        "50",
+        "--json",
+        env=env,
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["applied"] == 0
+
+
+def test_bulk_edit_only_matches_type(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    run_cli(
+        "draw",
+        "rect",
+        "--session",
+        str(session_path),
+        "--x",
+        "10",
+        "--y",
+        "10",
+        "--width",
+        "50",
+        "--height",
+        "50",
+        "--tag",
+        "a/rect",
+        env=env,
+    )
+    run_cli(
+        "draw",
+        "line",
+        "--session",
+        str(session_path),
+        "--x1",
+        "0",
+        "--y1",
+        "0",
+        "--x2",
+        "100",
+        "--y2",
+        "100",
+        "--tag",
+        "a/line",
+        env=env,
+    )
+
+    result = run_cli(
+        "edit",
+        "rect",
+        "--session",
+        str(session_path),
+        "--tag-prefix",
+        "a/",
+        "--fill",
+        "#FF0000",
+        "--json",
+        env=env,
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["applied"] == 1
+
+    scene = read_scene(session_path)
+    rect = [o for o in scene["objects"] if o["type"] == "rect"][0]
+    line = [o for o in scene["objects"] if o["type"] == "line"][0]
+    assert rect["fill"] == "#FF0000"
+    assert "fill" not in line
