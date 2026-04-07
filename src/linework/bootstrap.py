@@ -22,9 +22,8 @@ SCHEMA_DISCOVERY_SUMMARY = (
 
 WORKFLOW_GUIDANCE_SUMMARY = (
     "Use `linework new` once for a persistent session, then keep reusing that "
-    "same session path for iterative changes. "
-    "Use `linework watch` to open a live watcher for the user. "
-    "Use `linework run --output` for disposable headless exports."
+    "same session path for iterative changes with draw/edit/delete commands. "
+    "Use `linework watch` to open a live watcher for the user."
 )
 
 _SCHEMA_DISCOVERY_COMMANDS = (
@@ -36,12 +35,11 @@ _SCHEMA_DISCOVERY_COMMANDS = (
 
 _WORKFLOW_GUIDANCE_COMMANDS = (
     ("linework new --name idea-board", "create one persistent session to reuse"),
-    ("linework run --session PATH --json < ops.jsonl", "keep iterating in that same session"),
     ("linework watch --session PATH", "open a live watcher for the user"),
+    ("linework draw rect --session PATH --x 50 --y 50 ...", "draw objects into that session"),
     ("linework inspect --session PATH --json", "read the current scene in that session"),
     ("linework export --session PATH --output out.png", "export from that same session"),
-    ("linework new --stdin --name idea-board", "create and seed a reusable session"),
-    ("linework run --file ops.jsonl --output out.png", "disposable one-shot export"),
+    ("linework new --file ops.jsonl --name idea-board", "create and seed a reusable session"),
 )
 
 
@@ -67,8 +65,8 @@ BOOTSTRAP_TEXT = f"""\
 linework: agent-first CLI sketch tool
 
 Linework is a non-interactive, session-based drawing tool for fast sketches.
-Every drawing lives in an explicit session directory. JSONL batch operations are
-the primary interface, with convenience commands for common single-object edits.
+Every drawing lives in an explicit session directory. Create one session, then
+keep using the same --session PATH for all draw/edit/delete/inspect/export work.
 {_DEFAULTS_LINE}
 {SCHEMA_DISCOVERY_SUMMARY}
 {WORKFLOW_GUIDANCE_SUMMARY}
@@ -86,8 +84,9 @@ Golden path:
   4. Open a watcher for the user (if they want to see it live)
       linework watch --session PATH
 
-  5. Apply changes to that same session (primary interface)
-      linework run --session PATH --json < ops.jsonl
+  5. Draw objects into that session
+      linework draw rect --session PATH --x 50 --y 50 --width 200 --height 100 --json
+      linework draw text --session PATH --x 50 --y 50 --width 200 --height 100 --text "Hello"
 
   6. Inspect the scene to discover IDs and tags before editing
       linework inspect --session PATH --json
@@ -98,9 +97,8 @@ Golden path:
 
   8. Export from that same session
       linework export --session PATH --output out.png
-      linework run --file ops.jsonl --output out.png --width 1200 --height 800
 
-JSONL reference (pipe to linework run --session PATH --json):
+JSONL reference (for linework new --file ops.jsonl or --stdin):
   {{"op":"draw.line","payload":{{"x1":0,"y1":0,"x2":200,"y2":100}}}}
   {{"op":"draw.arrow","payload":{{"x1":20,"y1":140,"x2":180,"y2":140,"arrowhead":"both","arrow_size":18}}}}
   {{"op":"draw.rect","payload":{{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","tag":"box"}}}}
@@ -117,8 +115,8 @@ JSONL reference (pipe to linework run --session PATH --json):
 Primitives: line, arrow, rect, ellipse, circle, polyline, polygon, text, image
 Operations: draw.*, edit.*, delete, undo, schema
 IDs are auto-assigned if omitted from draw operations. Undo reverses the last
-action; a successful `linework run` batch undoes as one action. `draw.circle`
-and `edit.circle` are convenience aliases stored as ellipses.
+action; a seeded batch (via `linework new --file/--stdin`) undoes as one action.
+`draw.circle` and `edit.circle` are convenience aliases stored as ellipses.
 
 Selection:
   - `inspect` is the read interface for finding object IDs and tags.
@@ -131,7 +129,7 @@ Selection:
 Commands:
   linework schema       Print compact overview, one-op reference, or full manifest
   linework new          Create a new session (optionally seeded from JSONL)
-  linework run          Apply JSONL operations or do a one-shot export
+  linework sessions     List sessions or clean up old ones
   linework inspect      Read current scene state
   linework export       Export PNG to a path
   linework watch        Open a read-only watcher window
@@ -146,6 +144,6 @@ Mutation commands accept --json and --session PATH.
 
 Help:
   linework --help
-  linework run --help
   linework new --help
+  linework draw rect --help
 """

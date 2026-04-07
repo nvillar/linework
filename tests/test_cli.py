@@ -92,7 +92,7 @@ def test_top_level_help_includes_golden_path() -> None:
     assert "linework schema --json" in result.stdout
     assert "full manifest" in result.stdout
     assert "linework schema" in result.stdout
-    assert "linework run --session PATH --json < ops.jsonl" in result.stdout
+    assert "linework draw rect --session PATH" in result.stdout
     assert result.stderr == ""
 
 
@@ -101,19 +101,10 @@ def test_new_help_advertises_watch_command() -> None:
 
     assert result.returncode == 0
     assert "watch_command" in result.stdout
-    assert "run_command" in result.stdout
+    assert "inspect_command" in result.stdout
     assert "reuse the printed session path" in result.stdout
     assert "--json" in result.stdout
     assert "800x800" in result.stdout
-    assert result.stderr == ""
-
-
-def test_run_help_advertises_background_for_one_shot_mode() -> None:
-    result = run_cli("run", "--help")
-
-    assert result.returncode == 0
-    assert "--background" in result.stdout
-    assert "temporary session" in result.stdout
     assert result.stderr == ""
 
 
@@ -244,7 +235,7 @@ def test_new_uses_explicit_session_path(tmp_path: Path) -> None:
 
     assert result.returncode == 0
     assert f"Session path: {session_path}" in result.stdout
-    assert f"linework run --session {session_path} --json < ops.jsonl" in result.stdout
+    assert f"linework draw rect --session {session_path}" in result.stdout
     assert result.stderr == ""
 
     session_json = json.loads((session_path / "session.json").read_text(encoding="utf-8"))
@@ -469,9 +460,9 @@ def test_new_json_includes_watch_command(
     payload = json.loads(captured.out)
     assert payload["session_path"] == str(session_path)
     assert payload["watch_command"] == f"linework watch --session {session_path}"
-    assert payload["run_command"] == f"linework run --session {session_path}"
     assert payload["inspect_command"] == f"linework inspect --session {session_path}"
     assert payload["export_command"] == f"linework export --session {session_path} --output out.png"
+    assert "run_command" not in payload
     assert captured.err == ""
 
 

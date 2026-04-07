@@ -93,23 +93,27 @@ def test_uv_tool_install_from_project_runs_installed_cli(tmp_path: Path) -> None
     assert version_result.stdout.strip().startswith("0.")
 
     session_path = tmp_path / "installed-session"
+    jsonl_file = tmp_path / "draw.jsonl"
+    jsonl_file.write_text(
+        '{"op":"draw.text","payload":'
+        '{"x":12,"y":16,"width":72,"height":36,"text":"pkg","size":18}}\n',
+        encoding="utf-8",
+    )
     new_result = _run(
-        [str(binary_path), "new", "--session", str(session_path), "--json"],
+        [
+            str(binary_path),
+            "new",
+            "--session",
+            str(session_path),
+            "--file",
+            str(jsonl_file),
+            "--json",
+        ],
         env=env,
     )
     assert new_result.returncode == 0, new_result.stderr
     new_payload = json.loads(new_result.stdout)
     assert new_payload["session_path"] == str(session_path)
-
-    run_result = _run(
-        [str(binary_path), "run", "--session", str(session_path), "--json"],
-        env=env,
-        stdin=(
-            '{"op":"draw.text","payload":'
-            '{"x":12,"y":16,"width":72,"height":36,"text":"pkg","size":18}}\n'
-        ),
-    )
-    assert run_result.returncode == 0, run_result.stderr
 
     with Image.open(session_path / "render" / "latest.png") as rendered:
         blank = Image.new("RGBA", rendered.size, (255, 255, 255, 255))

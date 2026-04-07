@@ -146,9 +146,16 @@ Milestones 4 and 5 reflect an agent-first delivery order: the JSONL batch interf
 - allowed `linework new --session PATH` to initialize inside a pre-created empty directory
 - quoted shell-facing color examples and added shell guidance around `#RRGGBB[AA]` values
 
+#### Milestone 14: Simplify session workflow (complete)
+
+- removed `linework run` command entirely; agents use `new --file/--stdin` for batch seeding and convenience commands for iterative changes
+- added `linework sessions` for listing sessions and `--prune` for cleaning up old ones
+- added session-count cleanup nudge to `linework new` output when ≥10 sessions exist
+- updated bootstrap/help/schema/docs to teach the draw/edit/delete convenience workflow as the primary interface
+
 ### Current implementation status
 
-Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13.
+Completed milestones: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14.
 
 Current user-facing command surface:
 
@@ -156,7 +163,7 @@ Current user-facing command surface:
 - `linework --version` (with best-effort update check)
 - `linework schema [OP]` (compact overview, one-op detail, or `--json` manifest)
 - `linework new` (persistent session creation, optionally seeded from JSONL)
-- `linework run` (JSONL batch — primary agent interface, plus disposable one-shot export)
+- `linework sessions` (list sessions or clean up old ones with `--prune`)
 - `linework inspect`
 - `linework export`
 - `linework watch`
@@ -169,10 +176,10 @@ Internal engine capabilities:
 
 - append-only mutation engine for `draw.line`, `draw.arrow`, `draw.rect`, `draw.ellipse`, `draw.circle`, `draw.polyline`, `draw.polygon`, `draw.text`, `draw.image`, `edit.*`, `delete`, `undo`
 - tiered schema discovery: compact overview, per-operation detail, and full JSON manifest
-- JSONL batch execution with single-render-at-end semantics
-- batch-aware undo grouping for `linework run`
+- JSONL batch execution with single-render-at-end semantics (via `linework new --file/--stdin`)
+- batch-aware undo grouping for seeded batches
 - watched session seeding via `linework new --file` / `linework new --stdin`
-- one-shot batch export via `linework run --output` with optional temporary width / height / background overrides
+- session listing and age-based pruning via `linework sessions`
 - scene replay from command history
 - PNG rendering for all supported primitives with per-object alpha compositing for renderer-drawn objects
 - arrow rendering with configurable arrowhead placement and size
@@ -193,9 +200,8 @@ Implementation notes:
 - `linework new` now defaults to an `800x800` canvas
 - no-arg `linework`, `linework --help`, and `linework schema` now give consistent discovery advice: quick overview first, one-operation detail as needed, and `linework schema --json` as the full reference
 - `draw.circle` / `edit.circle` accept `x`, `y`, and `radius`, but the stored scene object type remains `ellipse`
-- workflow guidance now consistently recommends creating one persistent session with `linework new`, reusing that same `--session PATH` for iterative changes, using `linework watch` for live display, and using `linework run --output` for disposable headless exports
-- `linework new` output always includes exact next-step hints for reusing the created session (`watch_command`, `run_command`, `inspect_command`, `export_command`); `--file` / `--stdin` seed the session from an initial batch
-- `linework run --output` can export either an existing session or a temporary throwaway batch result, and `--width`, `--height`, and `--background` customize the temporary canvas when `--session` is omitted
+- workflow guidance now consistently recommends creating one persistent session with `linework new`, reusing that same `--session PATH` for all draw/edit/delete/inspect/export work, and using `linework watch` for live display
+- `linework new` output always includes exact next-step hints for reusing the created session (`watch_command`, `inspect_command`, `export_command`); `--file` / `--stdin` seed the session from an initial batch; a cleanup hint appears when ≥10 sessions exist
 - `draw.arrow` / `edit.arrow` support `arrowhead` (`end`, `start`, `both`, `none`) and optional pixel-sized `arrow_size`
 - text objects now use explicit layout boxes with `align`, `valign`, and optional `padding`; wrapping uses the padded inner box width
 - renderer-drawn objects now render through per-object RGBA layers and are alpha-composited in creation order; image objects continue to use explicit `alpha_composite`

@@ -22,8 +22,7 @@ def _locked_session_message(session_path: Path, *, pid: int | None = None) -> st
     return (
         f"session is locked{owner}: {session_path}. "
         "Only one writer may modify a session at a time. "
-        "Wait for the other command to finish, then reuse the same session path. "
-        "For multiple changes, batch them in one `linework run --session PATH` call."
+        "Wait for the other command to finish, then reuse the same session path."
     )
 
 

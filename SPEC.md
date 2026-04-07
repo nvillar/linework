@@ -104,8 +104,8 @@ The bundled font becomes part of the rendering contract for the MVP.
 - Object visibility
 - Delete
 - Whole-action undo
-- JSONL batch mode as the primary agent interface
-- One-shot batch export via `linework run --output`
+- JSONL batch seeding for new sessions
+- Session listing and age-based pruning
 - Read-only watcher window
 - Session portability
 - Single-writer locking
@@ -331,7 +331,7 @@ Each entry must include at least:
 - `op`
 - `payload`
 
-Entries created by `linework run` may additionally include `batch_id`. All
+Entries created by batch seeding (via `linework new --file/--stdin`) may additionally include `batch_id`. All
 successful operations from one batch share the same `batch_id` so a later
 `undo` can reverse the whole batch as one action.
 
@@ -401,7 +401,7 @@ If any part of a single mutating command fails:
 - the command must exit non-zero
 - the session must remain unchanged
 
-For `linework run` batch mode:
+For batch seeding (via `linework new --file/--stdin`):
 
 - operations apply sequentially
 - processing stops at the first failure
@@ -418,7 +418,7 @@ The MVP CLI has two tiers of commands:
 - `linework --version` — print the installed version and check for updates
 - `linework schema` — capability overview, one-op detail, or full JSON manifest
 - `linework new` — create a session, optionally seeded from JSONL
-- `linework run` — batch operations via JSONL or disposable one-shot export
+- `linework sessions` — list sessions or clean up old ones
 - `linework inspect` — read current session state
 - `linework export` — export PNG to a specified path
 - `linework watch` — open a read-only watcher window
@@ -430,7 +430,7 @@ The MVP CLI has two tiers of commands:
 - `linework delete` — delete a single object
 - `linework undo` — undo the most recent operation
 
-The convenience commands are thin wrappers. Every operation they perform is also available through `linework run`.
+The convenience commands are thin wrappers around the same engine used by batch seeding.
 
 ### 9.1 `linework`
 
@@ -443,7 +443,7 @@ The bootstrap output must explain:
 - what `linework` is
 - the recommended discovery flow: `linework schema` for a quick overview, `linework schema OP` for one-operation detail, and `linework schema --json` for the full reference
 - the session model
-- the recommended workflow split: `linework new` for persistent sessions, repeated reuse of the same `--session PATH` for iterative changes, `linework watch` for live display, and `linework run --output` for disposable headless exports
+- the recommended workflow split: `linework new` for persistent sessions, repeated reuse of the same `--session PATH` for iterative draw/edit/delete/inspect/export work, and `linework watch` for live display
 - the JSONL batch workflow as the primary interface
 - the default canvas size and background
 - how `linework new --file/--stdin` can seed a session from an initial batch
@@ -509,91 +509,22 @@ Flags:
 - `--stdin`
 - `--json`
 
-### 9.4 `linework run`
+### 9.4 `linework sessions`
 
-The primary mutation interface. Applies a batch of JSONL operations to an existing session, or exports a one-shot batch result with `--output`.
+List sessions in the default sessions directory, or prune old ones.
 
 Behavior:
 
-- requires `--session PATH` or `--output PATH`
-- reads JSONL from stdin by default
-- supports `--file PATH` to read from a file
-- supports `--output PATH` to export the rendered result after the batch
-- supports `--width INT` and `--height INT` to size the temporary canvas when used with `--output` and without `--session`
-- supports `--background #RRGGBB[AA]` to customize the temporary canvas when used with `--output` and without `--session`
-- applies operations sequentially
-- stops on first failure
-- prior successful operations remain committed
-- renders `render/latest.png` once after the last successful operation in the batch
-- a later `undo` reverses the successful portion of that batch as one action
-- when `--session` is omitted and `--output` is provided, `linework` must create a temporary default session, apply the batch, export the PNG, and then delete that temporary session; `--width`, `--height`, and `--background` customize that temporary session
-- `--width`, `--height`, and `--background` must be rejected when `--session` is provided
-- for persistent sessions and watcher-first workflows, users should prefer `linework new` followed by `linework run --session`, or seed the session directly with `linework new --file/--stdin`
-
-Each input line must be a JSON object with `op` and `payload` fields:
-
-```json
-{"op":"draw.rect","payload":{"x":80,"y":120,"width":300,"height":180,"fill":"#EEEEEE","tag":"api-box"}}
-{"op":"draw.arrow","payload":{"x1":400,"y1":210,"x2":620,"y2":210,"stroke":"#333333","stroke_width":3,"arrowhead":"end","arrow_size":18}}
-{"op":"draw.text","payload":{"x":80,"y":120,"width":300,"height":180,"text":"API flow","size":28,"fill":"#000000"}}
-```
-
-Object IDs may be omitted from draw operations; `linework` will generate sequential IDs and include them in the results.
+- lists sessions under `~/.linework/sessions/` with name, age, object count, and path
+- `--prune` deletes sessions older than a threshold (default: 7 days)
+- `--older-than Nd` customizes the prune threshold (e.g. `1d`, `14d`)
+- `--json` returns structured output
 
 Flags:
 
-- `--session PATH`
-- `--file PATH`
-- `--output PATH`
-- `--background #RRGGBB[AA]`
-- `--width INT`
-- `--height INT`
+- `--prune`
+- `--older-than Nd`
 - `--json`
-
-#### `linework run --json` output
-
-On success (all operations applied):
-
-```json
-{
-  "applied": 2,
-  "failed": null,
-  "results": [
-    {"op_id": "op_000001", "op": "draw.rect", "object_id": "obj_000001"},
-    {"op_id": "op_000002", "op": "draw.text", "object_id": "obj_000002"}
-  ],
-  "session_path": "/path/to/session",
-  "scene_object_count": 2,
-  "latest_render": "/path/to/session/render/latest.png"
-}
-```
-
-When `--output` is provided, the result must additionally include:
-
-```json
-{"exported_path": "/path/to/output.png"}
-```
-
-When `linework run` is used in temporary one-shot mode (`--output` without
-`--session`), the JSON payload must omit `session_path` and `latest_render`
-because the temporary session is deleted after export.
-
-On partial failure (some operations applied, then one failed):
-
-```json
-{
-  "applied": 1,
-  "failed": {"op": "draw.rect", "error": "width must be positive"},
-  "results": [
-    {"op_id": "op_000001", "op": "draw.rect", "object_id": "obj_000001"}
-  ],
-  "session_path": "/path/to/session",
-  "scene_object_count": 1,
-  "latest_render": "/path/to/session/render/latest.png"
-}
-```
-
-The `results` array always contains one entry per successfully applied operation, in order. Each entry includes the assigned `op_id` and `object_id` (when applicable). This allows callers that omit IDs to discover the generated IDs.
 
 ### 9.5 `linework inspect`
 
@@ -728,7 +659,7 @@ Convenience command for undoing the most recent action.
 Behavior:
 
 - whole-action undo
-- a successful `linework run` batch undoes as one action
+- a successful seeded batch (via `linework new --file/--stdin`) undoes as one action
 - implemented through append-only history semantics
 - updates `scene.json`
 - re-renders `render/latest.png`
@@ -764,7 +695,7 @@ object's tag.
 
 `linework edit image` may update geometry, tag, visibility, and other common editable fields, but image source replacement is not required in the MVP.
 
-All convenience commands support `--json` for structured output, following the same output contract as a single-operation `linework run --json` call.
+All convenience commands support `--json` for structured output.
 
 ## 10. Object Model
 
@@ -1029,9 +960,7 @@ Image asset replacement is not required in the MVP.
 
 ## 12. JSONL Batch Interface
 
-`linework run` is the primary agent interface.
-
-It is batch-oriented, not a persistent daemon protocol.
+JSONL batches are used to seed new sessions via `linework new --file` or `--stdin`.
 
 ### 12.1 Supported operations
 
@@ -1078,7 +1007,8 @@ command log. `delete` may target a unique live tag instead of an ID. For
 
 ### 12.3 Output format
 
-See §9.4 for the full `linework run --json` output specification.
+When `linework new --file/--stdin --json` is used, the output includes the created-session
+fields plus batch result fields (`applied`, `failed`, `results`, `scene_object_count`).
 
 ### 12.4 End-to-end agent example
 
@@ -1089,14 +1019,12 @@ linework new --name idea-board --json
 # 2. Reuse that session path in later commands
 SESSION=/path/to/session
 
-# 3. Draw a diagram via JSONL batch
-cat <<'EOF' | linework run --session "$SESSION" --json
-{"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","tag":"server"}}
-{"op":"draw.text","payload":{"x":50,"y":50,"width":200,"height":100,"text":"Server","size":20}}
-{"op":"draw.rect","payload":{"x":350,"y":50,"width":200,"height":100,"fill":"#E8E8E8","tag":"client"}}
-{"op":"draw.text","payload":{"x":350,"y":50,"width":200,"height":100,"text":"Client","size":20}}
-{"op":"draw.line","payload":{"x1":250,"y1":100,"x2":350,"y2":100,"stroke":"#333333","stroke_width":3}}
-EOF
+# 3. Draw objects into that session
+linework draw rect --session "$SESSION" --x 50 --y 50 --width 200 --height 100 --fill "#E8E8E8" --tag server --json
+linework draw text --session "$SESSION" --x 50 --y 50 --width 200 --height 100 --text "Server" --size 20 --json
+linework draw rect --session "$SESSION" --x 350 --y 50 --width 200 --height 100 --fill "#E8E8E8" --tag client --json
+linework draw text --session "$SESSION" --x 350 --y 50 --width 200 --height 100 --text "Client" --size 20 --json
+linework draw line --session "$SESSION" --x1 250 --y1 100 --x2 350 --y2 100 --stroke "#333333" --stroke-width 3 --json
 
 # 4. Inspect the result and discover IDs/tags before editing
 linework inspect --session "$SESSION" --json
@@ -1122,7 +1050,7 @@ After every successful single mutating command:
 - synchronously render `render/latest.png`
 - return success
 
-After every successful `linework run` batch:
+After every successful seeded batch (`linework new --file/--stdin`):
 
 - render `render/latest.png` once at the end of the batch
 
@@ -1216,8 +1144,8 @@ The test harness must validate at least:
 - `linework` no-arg bootstrap output
 - `linework schema`
 - `linework new`
-- `linework run` with JSONL input
-- `linework run --output`
+- `linework new --file` with JSONL input
+- `linework sessions`
 - `linework inspect`
 - `linework export`
 - convenience draw, edit, delete, undo commands
@@ -1232,7 +1160,8 @@ The test harness must validate at least:
 Its MVP is a session-based, non-interactive, self-describing retained-scene drawing system with:
 
 - explicit session directories
-- JSONL batch mode as the primary mutation interface
+- JSONL batch seeding for initial session setup
+- convenience draw/edit/delete/undo commands as the primary iteration interface
 - append-only command history
 - derived scene snapshots
 - PNG rendering

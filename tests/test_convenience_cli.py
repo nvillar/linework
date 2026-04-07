@@ -667,28 +667,33 @@ def test_undo_json_success_and_error_contract(tmp_path: Path) -> None:
     assert read_scene(session_path)["objects"] == []
 
 
-def test_undo_after_run_batch_removes_the_whole_batch(tmp_path: Path) -> None:
-    session_path, env = create_cli_session(tmp_path)
-
-    run_result = subprocess.run(
-        [sys.executable, "-m", "linework", "run", "--session", str(session_path), "--json"],
-        check=False,
-        capture_output=True,
-        text=True,
-        env={**os.environ, **env},
-        input=(
-            '{"op":"draw.rect","payload":{"x":10,"y":10,"width":50,"height":30}}\n'
-            '{"op":"draw.text","payload":{"x":20,"y":60,"width":80,"height":30,"text":"hi","size":14}}\n'
-        ),
+def test_undo_after_seeded_batch_removes_the_whole_batch(tmp_path: Path) -> None:
+    linework_home = tmp_path / "linework-home"
+    session_path = tmp_path / "seeded-session"
+    jsonl_file = tmp_path / "ops.jsonl"
+    jsonl_file.write_text(
+        '{"op":"draw.rect","payload":{"x":10,"y":10,"width":50,"height":30}}\n'
+        '{"op":"draw.text","payload":{"x":20,"y":60,"width":80,"height":30,"text":"hi","size":14}}\n',
+        encoding="utf-8",
     )
-    assert run_result.returncode == 0
+
+    new_result = run_cli(
+        "new",
+        "--session",
+        str(session_path),
+        "--file",
+        str(jsonl_file),
+        "--json",
+        env={"LINEWORK_HOME": str(linework_home)},
+    )
+    assert new_result.returncode == 0
 
     undo_result = run_cli(
         "undo",
         "--session",
         str(session_path),
         "--json",
-        env=env,
+        env={"LINEWORK_HOME": str(linework_home)},
     )
 
     assert undo_result.returncode == 0

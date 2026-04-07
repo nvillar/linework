@@ -74,13 +74,10 @@ to use it to avoid having to learn it every time.
 
 ## Under the hood
 
-Every drawing lives in a portable **session directory** when you want to keep
-iterating. The primary interface is **JSONL batch mode**, designed for automated
-agent loops. Use `linework new` for persistent sessions, `linework watch` to
-open a live display, and `linework run --output` for disposable headless exports.
-For iterative work, create one session and keep reusing that same `--session PATH`
-instead of creating a fresh session for every change. Here are the main patterns
-behind the scenes:
+Every drawing lives in a portable **session directory**. Create one session and
+keep reusing that same `--session PATH` for all draw/edit/delete/inspect/export
+work. Use `linework new` for persistent sessions and `linework watch` to open a
+live display. Here are the main patterns behind the scenes:
 
 ```bash
 # Create a session
@@ -92,21 +89,22 @@ linework watch --session PATH
 # Or create and seed a session from an existing JSONL batch
 linework new --name demo --file ops.jsonl
 
-# Draw via JSONL batch (in another terminal)
-cat <<'EOF' | linework run --session PATH --json
-{"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100,"fill":"#E8E8E8","tag":"box"}}
-{"op":"draw.polygon","payload":{"points":[[300,50],[400,10],[400,90]],"fill":"#FF6666"}}
-{"op":"draw.text","payload":{"x":50,"y":50,"width":200,"height":100,"text":"Hello","size":20}}
-EOF
+# Draw objects into that session
+linework draw rect --session PATH --x 50 --y 50 --width 200 --height 100 --fill "#E8E8E8" --tag box
+linework draw text --session PATH --x 50 --y 50 --width 200 --height 100 --text "Hello" --size 20
 
 # Read back what's on the canvas
 linework inspect --session PATH --json
 
+# Edit an existing object
+linework edit rect --session PATH --id obj_000001 --fill "#CCE5FF"
+
 # Export a PNG
 linework export --session PATH --output diagram.png
 
-# Or do a disposable one-shot export with a temporary canvas
-linework run --file ops.jsonl --output diagram.png --width 1200 --height 800 --background "#111827"
+# List and clean up old sessions
+linework sessions
+linework sessions --prune
 ```
 
 The **watcher window** runs as its own process, so it stays open while the agent works across multiple commands.

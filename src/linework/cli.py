@@ -37,9 +37,12 @@ from linework.storage.session import (
     apply_batch,
     apply_imported_image,
     apply_mutation,
+    count_auto_sessions,
     create_session,
     export_session,
     inspect_session,
+    list_sessions,
+    prune_sessions,
 )
 from linework.watch import (
     DEFAULT_INTERVAL_MS,
@@ -69,7 +72,7 @@ Workflow choice:
 Golden path:
   Create one session and keep reusing the same --session PATH for iterative changes.
   linework new --name idea-board --json
-  linework run --session PATH --json < ops.jsonl
+  linework draw rect --session PATH --x 50 --y 50 --width 200 --height 100 --fill "#E8E8E8" --json
   linework inspect --session PATH --json
   linework edit rect --session PATH --id obj_000001 --fill "#CCE5FF" --json
   linework export --session PATH --output out.png
@@ -83,31 +86,11 @@ Examples:
   cat ops.jsonl | linework new --stdin --name idea-board --json
   linework new --width {DEFAULT_CANVAS_WIDTH} --height {DEFAULT_CANVAS_HEIGHT}
 
-After creation, reuse the printed session path for future draw/edit/run/export
+After creation, reuse the printed session path for future draw/edit/export
 commands instead of creating a new session for each change.
 
-JSON output includes watch_command, run_command, inspect_command, and
-export_command fields. Plaintext output prints matching next-step hints.
-"""
-
-_RUN_EPILOG = """\
-Examples:
-  linework run --session PATH --json < ops.jsonl
-  linework run --session PATH --file ops.jsonl
-  linework run --file ops.jsonl --output out.png --width 1200 --height 800 --background "#111827"
-
-JSONL input:
-  {"op":"draw.rect","payload":{"x":50,"y":50,"width":200,"height":100}}
-  {"op":"draw.arrow","payload":{"x1":20,"y1":40,"x2":160,"y2":40,"arrowhead":"both","arrow_size":18}}
-  {"op":"draw.circle","payload":{"x":40,"y":40,"radius":30}}
-  {"op":"draw.polygon","payload":{"points":[[220,180],[300,120],[360,210]],"fill":"#FF6666"}}
-  {"op":"delete","payload":{"tag":"note-box"}}
-
-Provide --output without --session to use a temporary throwaway session that is
-exported and then deleted. Use --width, --height, and --background to
-customize that temporary canvas. For iterative work, create one session with
-`linework new` and keep reusing that same `--session PATH`. Batch multi-step
-updates in one `linework run --session PATH` call.
+JSON output includes watch_command, inspect_command, and export_command fields.
+Plaintext output prints matching next-step hints.
 """
 
 _SCHEMA_EPILOG = f"""\
@@ -152,8 +135,8 @@ _UNDO_EPILOG = """\
 Examples:
   linework undo --session PATH
 
-Undo reverses the last action. A successful `linework run` batch undoes as one
-action.
+Undo reverses the last action. A seeded batch (via `linework new --file/--stdin`)
+undoes as one action.
 """
 
 _WATCHER_STARTUP_TIMEOUT_S = 5.0
@@ -219,7 +202,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="linework",
         description=(
             "Agent-first CLI sketch tool. "
-            f"{SCHEMA_DISCOVERY_SUMMARY} Use `linework run` for JSONL batches, "
+            f"{SCHEMA_DISCOVERY_SUMMARY} "
             f"{WORKFLOW_GUIDANCE_SUMMARY} Use `inspect` to read the scene back, "
             "and `watch` for a read-only window."
         ),
@@ -302,55 +285,34 @@ def build_parser() -> argparse.ArgumentParser:
     )
     new_parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
-    # --- run ---
-    run_parser = subparsers.add_parser(
-        "run",
-        help="Apply JSONL operations (primary interface).",
+    # --- sessions ---
+    sessions_parser = subparsers.add_parser(
+        "sessions",
+        help="List sessions or clean up old ones.",
         description=(
-            "Apply JSONL operations to an existing session, or export a one-shot "
-            "throwaway batch with --output. Operations run in order, stop on first "
-            "failure, and render once at the end. When used without --session, "
-            "--width, --height, and --background customize the temporary canvas. "
-            "For iterative changes, create one persistent session with "
-            "`linework new` and keep reusing the same `--session PATH`."
+            "List sessions in the default sessions directory, or prune old ones. "
+            "Use --prune to delete sessions older than 7 days (or a custom "
+            "threshold via --older-than)."
         ),
-        epilog=_RUN_EPILOG,
+        epilog=(
+            "Examples:\n"
+            "  linework sessions\n"
+            "  linework sessions --prune\n"
+            "  linework sessions --prune --older-than 1d\n"
+        ),
         formatter_class=_HelpFormatter,
     )
-    run_parser.add_argument(
-        "--session",
-        help="Existing session directory path to reuse for iterative changes.",
+    sessions_parser.add_argument(
+        "--prune",
+        action="store_true",
+        help="Delete sessions older than the threshold.",
     )
-    run_parser.add_argument("--file", help="Read JSONL from a file instead of stdin.")
-    run_parser.add_argument(
-        "--output",
-        help=(
-            "Optional PNG export path. When used without --session, linework creates "
-            "a temporary session, exports the result, and deletes the session."
-        ),
+    sessions_parser.add_argument(
+        "--older-than",
+        default="7d",
+        help="Age threshold for pruning, e.g. 1d, 3d, 14d. (default: 7d)",
     )
-    run_parser.add_argument(
-        "--background",
-        help=(
-            "Canvas background color for the temporary session created by --output "
-            "when --session is omitted. Quote the value in shells."
-        ),
-    )
-    run_parser.add_argument(
-        "--width",
-        type=int,
-        help=(
-            "Canvas width for the temporary session created by --output when --session is omitted."
-        ),
-    )
-    run_parser.add_argument(
-        "--height",
-        type=int,
-        help=(
-            "Canvas height for the temporary session created by --output when --session is omitted."
-        ),
-    )
-    run_parser.add_argument("--json", action="store_true", help="Print JSON output.")
+    sessions_parser.add_argument("--json", action="store_true", help="Print JSON output.")
 
     # --- inspect ---
     inspect_parser = subparsers.add_parser(
@@ -498,8 +460,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return cmd_schema(args)
     if args.command == "new":
         return cmd_new(args)
-    if args.command == "run":
-        return cmd_run(args)
+    if args.command == "sessions":
+        return cmd_sessions(args)
     if args.command == "inspect":
         return cmd_inspect(args)
     if args.command == "export":
@@ -1213,27 +1175,6 @@ def _single_operation_payload(result: MutationResult) -> dict[str, object]:
     }
 
 
-def _batch_output_payload(
-    result: BatchResult,
-    *,
-    exported_path: str | None = None,
-    temporary_session: bool = False,
-) -> dict[str, object]:
-    """Serialize a batch result with optional export metadata."""
-    payload: dict[str, object] = {
-        "applied": result.applied,
-        "failed": result.failed,
-        "results": result.results,
-        "scene_object_count": result.scene_object_count,
-    }
-    if not temporary_session:
-        payload["session_path"] = result.session_path
-        payload["latest_render"] = result.latest_render
-    if exported_path is not None:
-        payload["exported_path"] = exported_path
-    return payload
-
-
 def _emit_created_session_result(result: CreatedSession, *, use_json: bool) -> None:
     """Emit output for a newly created session."""
     if use_json:
@@ -1246,20 +1187,26 @@ def _emit_created_session_result(result: CreatedSession, *, use_json: bool) -> N
     print(f"Latest render: {result.latest_render}")
 
 
+_SESSION_CLEANUP_THRESHOLD = 10
+
+
 def _new_output_payload(
     created: CreatedSession,
     *,
     batch_result: BatchResult | None = None,
+    cleanup_hint: str | None = None,
 ) -> dict[str, object]:
     """Serialize new-session output with optional initial-batch metadata."""
     payload = created.to_dict()
     payload["watch_command"] = f"linework watch --session {created.session_path}"
-    payload["run_command"] = f"linework run --session {created.session_path}"
     payload["inspect_command"] = f"linework inspect --session {created.session_path}"
     payload["export_command"] = f"linework export --session {created.session_path} --output out.png"
     payload["reuse_session_hint"] = (
-        "Reuse this session path for iterative changes instead of creating a new session."
+        "Reuse this session path for iterative draw/edit/delete/export "
+        "commands instead of creating a new session."
     )
+    if cleanup_hint is not None:
+        payload["cleanup_hint"] = cleanup_hint
     if batch_result is not None:
         payload.update(
             {
@@ -1277,10 +1224,11 @@ def _emit_new_session_result(
     created: CreatedSession,
     use_json: bool,
     batch_result: BatchResult | None = None,
+    cleanup_hint: str | None = None,
 ) -> int:
     """Emit output for a new session, optionally seeded from an initial batch."""
     if use_json:
-        payload = _new_output_payload(created, batch_result=batch_result)
+        payload = _new_output_payload(created, batch_result=batch_result, cleanup_hint=cleanup_hint)
         print(json.dumps(payload, indent=2))
         return 1 if batch_result is not None and batch_result.failed is not None else 0
 
@@ -1291,39 +1239,13 @@ def _emit_new_session_result(
             print(f"Failed: {batch_result.failed['op']}: {batch_result.failed['error']}")
         print(f"Objects: {batch_result.scene_object_count}")
     print("Reuse this session path for iterative changes:")
-    print(f"  linework run --session {created.session_path} --json < ops.jsonl")
+    print(f"  linework draw rect --session {created.session_path} --x 50 --y 50 ... --json")
     print(f"  linework inspect --session {created.session_path} --json")
     print(f"  linework export --session {created.session_path} --output out.png")
     print(f"Watch: linework watch --session {created.session_path}")
+    if cleanup_hint is not None:
+        print(f"Note: {cleanup_hint}")
     return 1 if batch_result is not None and batch_result.failed is not None else 0
-
-
-def _emit_batch_result(
-    *,
-    result: BatchResult,
-    use_json: bool,
-    exported_path: str | None = None,
-    temporary_session: bool = False,
-) -> int:
-    """Emit output for a batch result with optional export metadata."""
-    payload = _batch_output_payload(
-        result,
-        exported_path=exported_path,
-        temporary_session=temporary_session,
-    )
-    if use_json:
-        print(json.dumps(payload, indent=2))
-        return 1 if result.failed is not None else 0
-
-    print(f"Applied {result.applied} operation(s)")
-    if result.failed:
-        print(f"Failed: {result.failed['op']}: {result.failed['error']}")
-    print(f"Objects: {result.scene_object_count}")
-    if not temporary_session:
-        print(f"Latest render: {result.latest_render}")
-    if exported_path is not None:
-        print(f"Exported: {exported_path}")
-    return 1 if result.failed is not None else 0
 
 
 def _apply_single_operation(
@@ -1663,76 +1585,95 @@ def cmd_new(args: argparse.Namespace) -> int:
         except (OSError, SessionError, SessionLockedError, SceneEngineError) as exc:
             return _error(str(exc), use_json=args.json)
 
+    cleanup_hint = _check_session_cleanup_hint()
+
     return _emit_new_session_result(
         created=result,
         use_json=args.json,
         batch_result=batch_result,
+        cleanup_hint=cleanup_hint,
     )
 
 
-# ---------------------------------------------------------------------------
-# linework run
-# ---------------------------------------------------------------------------
-
-
-def cmd_run(args: argparse.Namespace) -> int:
-    """Handle ``linework run``."""
+def _check_session_cleanup_hint() -> str | None:
+    """Return a cleanup hint if there are many existing auto-created sessions."""
     try:
-        operations = _read_jsonl(args.file)
-    except (OSError, ValueError) as exc:
+        session_count = count_auto_sessions()
+    except OSError:
+        return None
+    if session_count >= _SESSION_CLEANUP_THRESHOLD:
+        return (
+            f"{session_count} existing sessions in the default sessions directory. "
+            "Consider asking the user about running "
+            "`linework sessions --prune` to clean up old sessions."
+        )
+    return None
+
+
+# ---------------------------------------------------------------------------
+# linework sessions
+# ---------------------------------------------------------------------------
+
+
+def _parse_older_than(value: str) -> int:
+    """Parse an --older-than value like '7d' into days."""
+    value = value.strip().lower()
+    if value.endswith("d"):
+        try:
+            return int(value[:-1])
+        except ValueError:
+            pass
+    try:
+        return int(value)
+    except ValueError:
+        raise ValueError(
+            f"invalid --older-than value: {value!r}. Use a number followed by 'd', e.g. 7d"
+        ) from None
+
+
+def cmd_sessions(args: argparse.Namespace) -> int:
+    """Handle ``linework sessions``."""
+    if args.prune:
+        try:
+            days = _parse_older_than(args.older_than)
+        except ValueError as exc:
+            return _error(str(exc), use_json=args.json)
+
+        try:
+            removed = prune_sessions(older_than_days=days)
+        except OSError as exc:
+            return _error(str(exc), use_json=args.json)
+
+        if args.json:
+            print(json.dumps({"pruned": len(removed), "removed": removed, "older_than_days": days}))
+        else:
+            if removed:
+                print(f"Pruned {len(removed)} session(s) older than {days} day(s):")
+                for name in removed:
+                    print(f"  {name}")
+            else:
+                print(f"No sessions older than {days} day(s) to prune.")
+        return 0
+
+    try:
+        sessions = list_sessions()
+    except OSError as exc:
         return _error(str(exc), use_json=args.json)
 
-    if args.session is None and args.output is None:
-        return _error("either --session or --output must be provided", use_json=args.json)
-    one_shot_options = [
-        flag
-        for flag, value in (
-            ("--background", args.background),
-            ("--width", args.width),
-            ("--height", args.height),
-        )
-        if value is not None
-    ]
-    if args.session is not None and one_shot_options:
-        return _error(
-            (
-                f"{', '.join(one_shot_options)} is only supported with --output "
-                "when --session is omitted"
-            ),
-            use_json=args.json,
-        )
+    if args.json:
+        print(json.dumps({"sessions": sessions, "count": len(sessions)}))
+        return 0
 
-    try:
-        if args.session is not None:
-            result = apply_batch(args.session, operations=operations)
-            exported_path = (
-                export_session(args.session, output=args.output) if args.output else None
-            )
-            return _emit_batch_result(
-                result=result,
-                use_json=args.json,
-                exported_path=exported_path,
-            )
+    if not sessions:
+        print("No sessions found.")
+        return 0
 
-        with tempfile.TemporaryDirectory(prefix="linework-run-") as temp_dir:
-            temp_session = Path(temp_dir) / "session"
-            created = create_session(
-                session=str(temp_session),
-                name="one-shot",
-                width=args.width or DEFAULT_CANVAS_WIDTH,
-                height=args.height or DEFAULT_CANVAS_HEIGHT,
-                background=args.background or DEFAULT_CANVAS_BACKGROUND,
-            )
-            result = apply_batch(created.session_path, operations=operations)
-            exported_path = export_session(created.session_path, output=args.output)
-            return _emit_batch_result(
-                result=result,
-                use_json=args.json,
-                exported_path=exported_path,
-                temporary_session=True,
-            )
-    except (OSError, SessionError, SessionLockedError, SceneEngineError) as exc:
-        return _error(str(exc), use_json=args.json)
+    print(f"{'Name':<40} {'Age':>8}  {'Objects':>7}  Path")
+    print(f"{'─' * 40} {'─' * 8}  {'─' * 7}  {'─' * 30}")
+    for s in sessions:
+        print(f"{s['name']:<40} {s['age']:>8}  {s['objects']:>7}  {s['path']}")
+    print(f"\n{len(sessions)} session(s) total.")
+    return 0
 
 
 def _read_jsonl(file_path: str | None) -> list[dict[str, object]]:

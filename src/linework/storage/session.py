@@ -625,3 +625,98 @@ def apply_batch(
         scene_object_count=len(scene.objects),
         latest_render=str(resolved / updated_metadata.paths.latest_render),
     )
+
+
+# ---------------------------------------------------------------------------
+# Session listing and cleanup
+# ---------------------------------------------------------------------------
+
+
+def count_auto_sessions() -> int:
+    """Count sessions in the default sessions root."""
+    root = sessions_root()
+    if not root.is_dir():
+        return 0
+    return sum(1 for child in root.iterdir() if child.is_dir())
+
+
+def list_sessions() -> list[dict[str, str]]:
+    """List sessions in the default sessions root with metadata."""
+    root = sessions_root()
+    if not root.is_dir():
+        return []
+
+    sessions: list[dict[str, str]] = []
+    for child in sorted(root.iterdir()):
+        if not child.is_dir():
+            continue
+        session_json = child / "session.json"
+        scene_json = child / "scene.json"
+        name = child.name
+        age = _format_session_age(child)
+        objects = "?"
+        if scene_json.is_file():
+            try:
+                scene = json.loads(scene_json.read_text(encoding="utf-8"))
+                objects = str(len(scene.get("objects", [])))
+            except (json.JSONDecodeError, OSError):
+                pass
+        if session_json.is_file():
+            try:
+                meta = json.loads(session_json.read_text(encoding="utf-8"))
+                name = meta.get("name", child.name)
+            except (json.JSONDecodeError, OSError):
+                pass
+        sessions.append(
+            {
+                "name": name,
+                "age": age,
+                "objects": objects,
+                "path": str(child),
+            }
+        )
+    return sessions
+
+
+def prune_sessions(*, older_than_days: int) -> list[str]:
+    """Delete sessions older than a threshold. Returns removed session names."""
+    root = sessions_root()
+    if not root.is_dir():
+        return []
+
+    import time
+
+    cutoff = time.time() - older_than_days * 86400
+    removed: list[str] = []
+    for child in sorted(root.iterdir()):
+        if not child.is_dir():
+            continue
+        session_json = child / "session.json"
+        if not session_json.is_file():
+            continue
+        try:
+            mtime = session_json.stat().st_mtime
+        except OSError:
+            continue
+        if mtime < cutoff:
+            shutil.rmtree(child, ignore_errors=True)
+            removed.append(child.name)
+    return removed
+
+
+def _format_session_age(session_dir: Path) -> str:
+    """Format session age from its session.json mtime."""
+    session_json = session_dir / "session.json"
+    if not session_json.is_file():
+        return "?"
+    try:
+        import time
+
+        age_s = time.time() - session_json.stat().st_mtime
+    except OSError:
+        return "?"
+    if age_s < 3600:
+        return f"{int(age_s / 60)}m"
+    if age_s < 86400:
+        return f"{age_s / 3600:.1f}h"
+    return f"{age_s / 86400:.1f}d"
