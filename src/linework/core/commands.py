@@ -84,7 +84,7 @@ def normalize_command(
     batch_id: str | None = None,
 ) -> CommandRecord:
     """Normalize a command payload into a canonical command record."""
-    normalized_payload = _normalize_alias_payload(op=op, payload=dict(payload or {}))
+    normalized_payload = normalize_alias_payload(op=op, payload=dict(payload or {}))
 
     if op in DRAW_OPERATIONS:
         normalized_payload.setdefault("id", next_object_id(existing_commands))
@@ -205,7 +205,7 @@ def _resolve_unique_object_id_by_tag(
     return matches[0]
 
 
-def _normalize_alias_payload(op: str, payload: dict[str, object]) -> dict[str, object]:
+def normalize_alias_payload(op: str, payload: dict[str, object]) -> dict[str, object]:
     """Normalize convenience alias payloads before validation and storage."""
     if op not in {"draw.circle", "edit.circle"}:
         return payload

@@ -1428,6 +1428,52 @@ def test_bulk_edit_fill_by_tag_prefix(tmp_path: Path) -> None:
             assert obj["fill"] == "#00FF00"
 
 
+def test_bulk_edit_circle_radius_by_tag_prefix(tmp_path: Path) -> None:
+    session_path, env = create_cli_session(tmp_path)
+    for index, tag in enumerate(("grp/one", "grp/two", "other/one")):
+        run_cli(
+            "draw",
+            "circle",
+            "--session",
+            str(session_path),
+            "--x",
+            str(20 + index * 80),
+            "--y",
+            "20",
+            "--radius",
+            "20",
+            "--tag",
+            tag,
+            env=env,
+        )
+
+    result = run_cli(
+        "edit",
+        "circle",
+        "--session",
+        str(session_path),
+        "--tag-prefix",
+        "grp/",
+        "--radius",
+        "50",
+        "--json",
+        env=env,
+    )
+    assert result.returncode == 0
+    payload = json.loads(result.stdout)
+    assert payload["applied"] == 2
+    assert payload["tag_prefix"] == "grp/"
+
+    scene = read_scene(session_path)
+    for obj in scene["objects"]:
+        if obj["tag"].startswith("grp/"):
+            assert obj["width"] == 100.0
+            assert obj["height"] == 100.0
+        else:
+            assert obj["width"] == 40.0
+            assert obj["height"] == 40.0
+
+
 def test_bulk_edit_undo_restores_all(tmp_path: Path) -> None:
     session_path, env = create_cli_session(tmp_path)
     for tag in ("a/1", "a/2"):

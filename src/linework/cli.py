@@ -29,6 +29,7 @@ from linework.constants import (
     TEXT_ALIGNS,
     TEXT_VALIGNS,
 )
+from linework.core.commands import normalize_alias_payload
 from linework.core.errors import SceneEngineError
 from linework.storage.lock import SessionLockedError
 from linework.storage.models import BatchResult, CreatedSession, MutationResult
@@ -2519,6 +2520,7 @@ def _cmd_bulk_edit(args: argparse.Namespace, *, tag_prefix: str) -> int:
             "stroke_width",
             "visible",
         )
+        edit_payload = normalize_alias_payload(op="edit.circle", payload=edit_payload)
     elif edit_type == "polyline":
         _include_optional_values(edit_payload, args, "stroke", "stroke_width", "visible")
         if getattr(args, "points", None) is not None:
